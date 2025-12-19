@@ -3,3 +3,4 @@ giskard[llm]
 pandas
 openpyxl
 litellm>=1.40.0
+datasets
