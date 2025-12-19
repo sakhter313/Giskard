@@ -2,4 +2,4 @@ streamlit
 giskard[llm]
 pandas
 openpyxl
-litellm>=1.40.0  # Recent version with good compatibility
+litellm>=1.40.0
