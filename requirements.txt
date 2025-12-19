@@ -4,3 +4,6 @@ pandas
 openpyxl
 litellm>=1.40.0
 datasets
+transformers
+huggingface_hub
+torch  # For local model
