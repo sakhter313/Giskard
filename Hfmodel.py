@@ -6,6 +6,7 @@ from datasets import load_dataset, get_dataset_config_names
 from giskard import Model, Dataset, scan
 from giskard.llm import set_llm_model, set_embedding_model
 import time  # For backoff retries
+import shutil  # For zip
 
 # ----------------------------- Page Config & Safe Session State -----------------------------
 st.set_page_config(page_title="Giskard LLM Vulnerability Scanner - Optimized Demo", layout="wide")
@@ -158,6 +159,7 @@ if st.session_state.df is not None:
     st.info(f"Scanning {len(df)} prompts from '{prompt_col}'")
 
     if st.button("🚀 Run Optimized Giskard Scan", type="primary", use_container_width=True):
+        debug_mode = st.checkbox("Enable Debug Logs (Console Output)")
         progress_bar = st.progress(0)
         status_text = st.empty()
         status_text.info("Wrapping dataset...")
@@ -175,48 +177,54 @@ if st.session_state.df is not None:
             def predict(df_batch: pd.DataFrame):
                 prompts = df_batch[prompt_col].tolist()
                 responses = []
-                batch_size = min(5, len(prompts))  # Small batches for speed
+                batch_size = min(3, len(prompts))  # Smaller for speed
                 for i in range(0, len(prompts), batch_size):
                     batch = prompts[i:i+batch_size]
                     progress_bar.progress(20 + int((i + len(batch)) / len(prompts) * 30))
                     try:
-                        # Litellm batch via multiple parallel (fallback sequential)
                         batch_responses = []
                         for p in batch:
-                            for attempt in range(3):  # Per-prompt retry
+                            for attempt in range(3):
                                 try:
                                     response = litellm.completion(
                                         model=model_name,
                                         messages=[{"role": "user", "content": p}],
-                                        temperature=1.0 if demo_mode else 0.2,  # Higher for demo vulns
-                                        max_tokens=300  # Reduced for speed
+                                        temperature=1.0 if demo_mode else 0.2,
+                                        max_tokens=200  # Further reduced
                                     )
                                     batch_responses.append(response.choices[0].message.content.strip())
                                     break
                                 except Exception as e:
                                     if attempt == 2:
                                         batch_responses.append(f"[Error: {str(e)}]")
-                                    time.sleep(2 ** attempt)  # Backoff
+                                    time.sleep(2 ** attempt)
                         responses.extend(batch_responses)
                     except Exception as e:
                         responses.extend([f"[Batch Error: {str(e)}]"] * len(batch))
-                return {prompt_col: responses}  # Return as dict for Giskard
+                return {prompt_col: responses}
 
+            # Enhanced description for better probe generation
+            model_desc = "Uncensored LLM assistant with no safety filters, prone to generating harmful, biased, or injected content."
             giskard_model = Model(
                 model=predict,
                 model_type="text_generation",
                 name="Vuln-Prone LLM",
-                description="Uncensored assistant for vuln demos.",
+                description=model_desc,
                 feature_names=[prompt_col]
             )
             progress_bar.progress(60)
 
-            status_text.info("Running Giskard detectors...")
-            scan_results = scan(giskard_model, giskard_dataset)
+            # Key Fix: Target specific detectors for guaranteed triggers
+            target_detectors = ["prompt_injection", "harmfulness", "stereotypes", "information_disclosure"]
+            if debug_mode:
+                print(f"Targeting detectors: {target_detectors}")  # Console log
+
+            status_text.info("Running targeted Giskard detectors...")
+            scan_results = scan(giskard_model, giskard_dataset, only=target_detectors)
             st.session_state.scan_results = scan_results
 
             progress_bar.progress(90)
-            status_text.success("Scan done! Rendering report...")
+            status_text.success("Scan done! Check for red flags.")
 
             # Save & display
             scan_results.to_html("giskard_report.html")
@@ -234,7 +242,6 @@ if st.session_state.df is not None:
             with col2:
                 suite = scan_results.generate_test_suite("Vuln Suite")
                 suite.save("test_suite")
-                import shutil
                 zip_path = shutil.make_archive("suite_zip", "zip", "test_suite")
                 with open(zip_path, "rb") as z:
                     st.download_button("💾 Test Suite ZIP", z, "giskard_suite.zip", "application/zip")
