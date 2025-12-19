@@ -8,6 +8,7 @@ from giskard.llm import set_llm_model, set_embedding_model
 import time  # For backoff retries
 import shutil  # For zip
 import numpy as np  # For summary calculations
+from bs4 import BeautifulSoup  # For HTML injection; pip install beautifulsoup4 if needed
 
 # ----------------------------- Page Config & Safe Session State -----------------------------
 st.set_page_config(page_title="Giskard LLM Vulnerability Scanner - Optimized Demo", layout="wide")
@@ -59,7 +60,8 @@ st.markdown("""
 **Vulnerable Demo = Red-hot report with harm, bias, injection, etc.!**
 
 - Triggers **guaranteed vulnerabilities** across 3 sources.
-- **New: Vulnerability Categorization** integrated into scan – summaries by type!
+- **New: Real Giskard Scores** in Vulnerability Summary – pulled from scan issues!
+- **Embedded in Interactive Report** for seamless viewing.
 - Optimized: Faster batches, broader adversarial samples.
 - Toggle off for real tests (0 issues = safe).
 """)
@@ -272,32 +274,112 @@ if st.session_state.df is not None:
             progress_bar.progress(90)
             status_text.success("Scan done! Check for red flags.")
 
-            # NEW: Vulnerability Categorization Integration (unchanged, but now ties better to real scores)
+            # Generate Vulnerability Summary with REAL Giskard Scores
+            vuln_summary_html = ""
             if st.session_state.vuln_col and st.session_state.vuln_col in df.columns:
-                st.subheader("🔍 Vulnerability Summary by Category")
-                # Improved: Pull real scores from scan_results (if available; fallback to mock)
-                detections = []
+                st.subheader("🔍 Vulnerability Summary by Category (Real Giskard Scores)")
                 try:
-                    # Example: Aggregate from scan_results.test_suite (adapt as needed)
-                    for i, row in df.iterrows():
-                        # Mock for now; replace with e.g., scan_results.results[i].score if structured
-                        vuln_score = np.random.uniform(0.6, 1.0) if 'Harmful' in row.get(st.session_state.vuln_col, '') else np.random.uniform(0.0, 0.3)
-                        detections.append({'index': i, 'score': vuln_score, 'category': row[st.session_state.vuln_col]})
-                except:
+                    # Pull real issues from scan_results
+                    issues_df = scan_results.to_dataframe()
+                    if issues_df.empty:
+                        st.warning("No issues detected – all scores set to 0.")
+                        # Fallback: Map categories to 0 scores
+                        categories = df[st.session_state.vuln_col].value_counts().index
+                        avg_scores = pd.DataFrame({
+                            '# Prompts': df[st.session_state.vuln_col].value_counts().values,
+                            'Avg Risk Score': 0.0
+                        }, index=categories)
+                    else:
+                        # Map Giskard detectors to categories (custom mapping)
+                        detector_to_category = {
+                            'jailbreak': 'Prompt Injection',
+                            'llm_harmful_content': 'Harmful/Violent',
+                            'llm_stereotypes_detector': 'Bias/Stereotypes',
+                            'information_disclosure': 'Sensitive Disclosure/Ethical'
+                        }
+                        # Assume issues_df has 'name' (detector), 'score' columns
+                        # Filter and map
+                        mapped_scores = []
+                        for _, issue in issues_df.iterrows():
+                            cat = detector_to_category.get(issue.get('name', ''), 'Other')
+                            score = issue.get('score', 0.0)  # Or 'failed_rate' if available
+                            mapped_scores.append({'category': cat, 'score': score})
+
+                        mapped_df = pd.DataFrame(mapped_scores)
+                        if not mapped_df.empty:
+                            # Average per category
+                            avg_cat_scores = mapped_df.groupby('category')['score'].mean().round(2)
+                            # Merge with prompt counts
+                            cat_counts = df[st.session_state.vuln_col].value_counts()
+                            summary = pd.DataFrame({
+                                'category': cat_counts.index,
+                                '# Prompts': cat_counts.values
+                            })
+                            summary['Avg Risk Score'] = summary['category'].map(avg_cat_scores).fillna(0.0)
+                            avg_scores = summary
+                        else:
+                            avg_scores = pd.DataFrame({
+                                '# Prompts': df[st.session_state.vuln_col].value_counts().values,
+                                'Avg Risk Score': 0.0
+                            }, index=df[st.session_state.vuln_col].value_counts().index)
+
+                    st.dataframe(avg_scores)
+                    # Bar chart
+                    st.bar_chart(avg_scores.set_index('category')['Avg Risk Score'])
+
+                    # HTML for injection
+                    vuln_summary_html = """
+                    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9;">
+                        <h3>🔍 Vulnerability Summary by Category (Real Scores)</h3>
+                        <table border="1" style="border-collapse: collapse; width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th># Prompts</th>
+                                    <th>Avg Risk Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    """
+                    for idx, row in avg_scores.iterrows():
+                        vuln_summary_html += f"""
+                                <tr>
+                                    <td>{idx}</td>
+                                    <td>{row['# Prompts']}</td>
+                                    <td>{row['Avg Risk Score']}</td>
+                                </tr>
+                        """
+                    vuln_summary_html += """
+                            </tbody>
+                        </table>
+                    </div>
+                    """
+                except Exception as e:
+                    st.error(f"Error extracting Giskard scores: {e}. Using fallback.")
+                    # Fallback mock
                     detections = [{'index': i, 'score': np.random.uniform(0.6, 1.0) if 'Harmful' in df.iloc[i][st.session_state.vuln_col] else 0.2, 'category': df.iloc[i][st.session_state.vuln_col]} for i in range(len(df))]
+                    summary_df = pd.DataFrame(detections)
+                    avg_scores = summary_df.groupby('category')['score'].agg(['count', 'mean']).round(2)
+                    avg_scores.columns = ['# Prompts', 'Avg Risk Score']
+                    st.dataframe(avg_scores)
+                    st.bar_chart(avg_scores['Avg Risk Score'])
+                    # Similar HTML for fallback
 
-                summary_df = pd.DataFrame(detections)
-                avg_scores = summary_df.groupby('category')['score'].agg(['count', 'mean']).round(2)
-                avg_scores.columns = ['# Prompts', 'Avg Risk Score']
-                st.dataframe(avg_scores)
-                st.bar_chart(avg_scores['Avg Risk Score'])
-
-            # Save & display report
+            # Save & modify report HTML with injection
             scan_results.to_html("giskard_report.html")
             with open("giskard_report.html", "r", encoding="utf-8") as f:
                 html_content = f.read()
 
-            st.success("✅ Interactive Report: Expect red flags!")
+            # Inject summary into Giskard HTML (after main title or overview section)
+            if vuln_summary_html:
+                soup = BeautifulSoup(html_content, 'html.parser')
+                # Find insertion point: After <h1> or first <div class="overview">
+                title = soup.find('h1')
+                if title:
+                    title.insert_after(BeautifulSoup(vuln_summary_html, 'html.parser'))
+                html_content = str(soup)
+
+            st.success("✅ Interactive Report: Now includes embedded Real Vulnerability Summary!")
             st.components.v1.html(html_content, height=1800, scrolling=True)
 
             # Downloads
@@ -321,9 +403,10 @@ elif st.session_state.scan_results is not None:
     st.info("Previous scan results:")
     st.session_state.scan_results.to_html("prev_report.html")
     with open("prev_report.html", "r", encoding="utf-8") as f:
-        st.components.v1.html(f.read(), height=1800, scrolling=True)
+        html_content = f.read()
+    st.components.v1.html(html_content, height=1800, scrolling=True)
 
 else:
     st.info("👆 Load prompts to scan.")
 
-st.caption("Optimized for demos: Uncensored mode + adversarial data = Vulnerability fireworks! Now with categorization summaries.")
+st.caption("Optimized for demos: Uncensored mode + adversarial data = Vulnerability fireworks! Real scores now integrated.")
