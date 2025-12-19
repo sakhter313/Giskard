@@ -2,7 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 import litellm
-from giskard import Model, scan
+from giskard import Model, Dataset, scan
 from giskard.llm import set_llm_model, set_embedding_model
 
 # Page config
@@ -65,6 +65,13 @@ elif uploaded_file:
         st.error(f"Error reading file: {e}")
         st.stop()
 
+# Wrap the dataframe as a Giskard Dataset (fixes the ValueError)
+giskard_dataset = Dataset(
+    df=df,
+    name="Customer Support Questions",
+    column_types={"question": "text"}  # Specify types for better inference
+)
+
 # Model prediction function using LiteLLM
 @st.cache_data
 def predict_customer_support(question: str) -> str:
@@ -97,7 +104,8 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
 
     with st.spinner("Running Giskard vulnerability scan... This may take 3–10 minutes."):
         try:
-            scan_results = scan(giskard_model, df)
+            # Pass the wrapped Dataset to scan
+            scan_results = scan(giskard_model, giskard_dataset)
 
             # Generate interactive HTML report (identical to notebook display)
             html_path = "giskard_scan_report.html"
@@ -122,16 +130,17 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
                     )
 
             with col2:
-                # Generate and save test suite to a temporary directory for download
+                # Generate and save test suite
                 test_suite = scan_results.generate_test_suite("Customer Support Security Suite")
                 suite_path = "customer_support_test_suite"
-                test_suite.save(suite_path)  # Saves to a folder with JSON files
+                test_suite.save(suite_path)
 
                 import shutil
                 import tempfile
                 with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-                    shutil.make_archive(base_name=tmp.name, format="zip", root_dir=suite_path)
-                    with open(tmp.name + ".zip", "rb") as zip_f:
+                    shutil.make_archive(base_name=tmp.name.replace(".zip", ""), format="zip", root_dir=suite_path)
+                    zip_path = tmp.name.replace(".zip", "") + ".zip"
+                    with open(zip_path, "rb") as zip_f:
                         st.download_button(
                             label="💾 Download Test Suite (ZIP folder)",
                             data=zip_f,
