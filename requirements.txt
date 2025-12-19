@@ -1,0 +1,7 @@
+streamlit==1.38.0
+transformers==4.45.2  # Latest stable
+datasets  # No pin—lets pip grab latest (~2.21.0+ as of Dec 2025; avoids invalid 3.0.0)
+giskard[llm]==2025.10.0  # Or latest; check pip show locally
+requests==2.31.0
+pandas==2.2.2
+huggingface_hub==0.23.6  # Explicitly add for datasets backend
