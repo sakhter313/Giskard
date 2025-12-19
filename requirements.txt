@@ -1,4 +1,6 @@
+
 streamlit
-giskard[llm]
+giskard[llm]==2.18.0  # Or latest: pip search or check PyPI for newest
 pandas
 openpyxl
+litellm>=1.40.0       # Newer versions use updated tokenizers with better compatibility
