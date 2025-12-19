@@ -1,0 +1,6 @@
+streamlit==1.38.0  # Latest stable as of Dec 2025
+transformers==4.45.0
+datasets==3.0.0
+giskard[llm]==2025.12.0  # Hypothetical latest; check pip
+requests==2.31.0
+pandas==2.2.0
