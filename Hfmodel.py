@@ -12,6 +12,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 import tempfile
+import textwrap
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -379,20 +380,24 @@ def generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, vuln
             }
             effect_desc = effects.get(detector, "Unexpected outputs due to input sensitivity. Check Giskard guide for solutions.")
             
-            issues_html += f'''
-            <div class="issue-card" style="border-left: 4px solid {color}; padding: 10px; margin: 10px 0; background: #f9f9f9;">
-                <div class="issue-title"><strong>{detector.replace('_', ' ').title()}</strong></div>
-                <div class="fail-rate">Fail rate = {fail_rate}</div>
-                <div class="effect">{effect_desc}</div>
-                <button onclick="alert('Details: See full scan logs')">Show details</button>
-            </div>
-            '''
+            card_html = textwrap.dedent(f"""
+                <div class="issue-card" style="border-left: 4px solid {color}; padding: 10px; margin: 10px 0; background: #f9f9f9;">
+                    <div class="issue-title"><strong>{detector.replace('_', ' ').title()}</strong></div>
+                    <div class="fail-rate">Fail rate = {fail_rate}</div>
+                    <div class="effect">{effect_desc}</div>
+                    <button onclick="alert('Details: See full scan logs')">Show details</button>
+                </div>
+            """).strip()
+            issues_html += card_html
     
     # Full HTML mimicking image (tabs, warning box, etc.)
     summary_table = ""
-    if 'summary' in locals():
-        for idx, row in summary.iterrows():
-            summary_table += f'<tr><td>{idx}</td><td>{row.get("# Prompts", row.get("Total Prompts", ""))}</td><td>{row["Avg Risk Score"]}</td></tr>'
+    try:
+        if 'summary' in locals():
+            for idx, row in summary.iterrows():
+                summary_table += f'<tr><td>{idx}</td><td>{row.get("# Prompts", row.get("Total Prompts", ""))}</td><td>{row["Avg Risk Score"]}</td></tr>'
+    except:
+        pass  # Fallback if summary not defined
     
     html = f'''
     <!DOCTYPE html>
