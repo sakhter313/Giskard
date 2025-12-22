@@ -277,7 +277,7 @@ if st.session_state.df is not None:
                 issues_df = scan_results.to_dataframe()
                 if issues_df.empty:
                     st.info("✅ No major issues detected (all risk scores = 0.0)")
-                    summary = pd.DataFrame({"# Prompts": df[st.session_state.vuln_col].value_counts() if st.session_state.vuln_col else len(df)}, index=["Total"])
+                    summary = pd.DataFrame({"# Prompts": [len(df)]}, index=["Total"])
                     summary["Avg Risk Score"] = 0.0
                 else:
                     # Expanded mapping for Giskard detectors
@@ -299,7 +299,7 @@ if st.session_state.df is not None:
                         summary = pd.DataFrame({"# Prompts": counts})
                         summary["Avg Risk Score"] = summary.index.map(avg_scores).fillna(0.0).round(3)
                     else:
-                        summary = pd.DataFrame({"Total Prompts": [len(df)], "Avg Risk Score": [avg_scores.mean()]})
+                        summary = pd.DataFrame({"Total Prompts": [len(df)], "Avg Risk Score": [avg_scores.mean().round(3)]})
                 
                 st.dataframe(summary)
                 st.bar_chart(summary["Avg Risk Score"])
@@ -309,7 +309,7 @@ if st.session_state.df is not None:
 
             # Custom Giskard Report Generation
             status.info("📄 Generating enhanced report...")
-            html_report = generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, st.session_state.vuln_col)
+            html_report = generate_custom_giskard_report(scan_results, issues_df if 'issues_df' in locals() else pd.DataFrame(), df, prompt_col, st.session_state.vuln_col)
             st.components.v1.html(html_report, height=2000, scrolling=True)
             progress.progress(90)
 
@@ -328,8 +328,8 @@ if st.session_state.df is not None:
 
             # JSON Export for Report
             report_json = {
-                "summary": summary.to_dict(),
-                "issues": issues_df.to_dict('records'),
+                "summary": summary.to_dict() if 'summary' in locals() else {},
+                "issues": issues_df.to_dict('records') if 'issues_df' in locals() else [],
                 "model": model_name,
                 "dataset_size": len(df)
             }
@@ -351,11 +351,14 @@ def generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, vuln
     """Generate HTML mimicking Giskard UI with effects descriptions (based on provided image format)."""
     if issues_df.empty:
         issues_html = "<p>✅ No issues detected.</p>"
+        num_issues = 0
+        num_major = 0
     else:
         issues_html = ""
         major_issues = issues_df[issues_df['risk_score'] > 0.5]  # Threshold for 'major'
         num_major = len(major_issues)
-        issues_html += f'<div class="issues-header"><strong>{len(issues_df)} ISSUES</strong> <span style="color:red">{num_major} MAJOR</span></div>'
+        num_issues = len(issues_df)
+        issues_html += f'<div class="issues-header"><strong>{num_issues} ISSUES</strong> <span style="color:red">{num_major} MAJOR</span></div>'
         
         for _, issue in issues_df.iterrows():
             detector = issue['detector']
@@ -386,6 +389,11 @@ def generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, vuln
             '''
     
     # Full HTML mimicking image (tabs, warning box, etc.)
+    summary_table = ""
+    if 'summary' in locals():
+        for idx, row in summary.iterrows():
+            summary_table += f'<tr><td>{idx}</td><td>{row.get("# Prompts", row.get("Total Prompts", ""))}</td><td>{row["Avg Risk Score"]}</td></tr>'
+    
     html = f'''
     <!DOCTYPE html>
     <html>
@@ -398,30 +406,31 @@ def generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, vuln
         .tab {{ padding: 10px; cursor: pointer; border: 1px solid #ddd; margin-right: 5px; }}
         .tab.active {{ background: white; }}
         .issue-card {{ border: 1px solid #ddd; }}
+        table {{ border-collapse: collapse; width: 100%; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
     </style></head>
     <body>
         <div class="header">
             <span>🛡️ Giskard Scan Results</span>
-            <span>8 DETECTED | <span style="color:gray">Robustness</span> ● <span style="color:red">Harmful</span> ● Sensitive Info ● Stereotypes</span>
+            <span>{num_issues} DETECTED | <span style="color:gray">Robustness</span> ● <span style="color:red">Harmful</span> ● Sensitive Info ● Stereotypes</span>
         </div>
         <div class="warning-box">
             <strong>⚠️ Your model seems sensitive to small perturbations in input data.</strong> These can include adding typos, changing word order, or turning text to uppercase/lowercase. This happens when:
             <ul>
                 <li>There is not enough diversity in the training data</li>
                 <li>Overreliance on spurious correlations like the presence of specific words</li>
-                <li>Overreliance on complex models with large number of parameters that tend to overfit the training data</li>
                 <li>Use of complex models with large number of parameters that tend to overfit the training data</li>
             </ul>
             To learn more about causes and solutions, check our guide on <a href="https://docs.giskard.ai/">robustness issues</a>.
         </div>
         <div class="tabs">
-            <div class="tab active">ISSUES <span style="color:red">{len(issues_df)} MAJOR</span></div>
+            <div class="tab active">ISSUES <span style="color:red">{num_major} MAJOR</span></div>
         </div>
         {issues_html}
         <hr>
         <h3>Summary Table</h3>
         <table border="1"><tr><th>Category</th><th># Prompts</th><th>Avg Risk Score</th></tr>
-        {chr(10).join([f'<tr><td>{idx}</td><td>{val["# Prompts"]}</td><td>{val["Avg Risk Score"]}</td></tr>' for idx, val in summary.to_dict().items()]) if 'summary' in locals() else ''}
+        {summary_table}
         </table>
     </body></html>
     '''
