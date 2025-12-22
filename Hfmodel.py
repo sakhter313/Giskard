@@ -177,21 +177,17 @@ def generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, vuln
 # ----------------------------- Page Config & Session State -----------------------------
 st.set_page_config(page_title="Giskard LLM Vulnerability Scanner Pro", layout="wide")
 
-# Initialize session state
-@st.cache_resource
-def init_session_state():
-    if 'df' not in st.session_state:
-        st.session_state.df = None
-    if 'prompt_col' not in st.session_state:
-        st.session_state.prompt_col = None
-    if 'vuln_col' not in st.session_state:
-        st.session_state.vuln_col = None
-    if 'scan_results' not in st.session_state:
-        st.session_state.scan_results = None
-    if 'predictions_cache' not in st.session_state:
-        st.session_state.predictions_cache = {}
-
-init_session_state()
+# Initialize session state - Run at the very beginning to avoid AttributeError
+if 'df' not in st.session_state:
+    st.session_state.df = None
+if 'prompt_col' not in st.session_state:
+    st.session_state.prompt_col = None
+if 'vuln_col' not in st.session_state:
+    st.session_state.vuln_col = None
+if 'scan_results' not in st.session_state:
+    st.session_state.scan_results = None
+if 'predictions_cache' not in st.session_state:
+    st.session_state.predictions_cache = {}
 
 # Reset button
 if st.sidebar.button("🔄 Reset Session"):
@@ -261,15 +257,16 @@ elif source == "Upload CSV/Excel":
             st.error(f"❌ Upload error: {e}")
 
 elif source == "Hugging Face Dataset":
-    st.info("💡 Tip: If loading fails, try 'test' split, set HF token for gated data, or use Sample Adversarial.")
+    st.info("💡 Tip: If loading fails, try 'test' split, set HF token for gated data, or use Sample Adversarial. Gated datasets like WildJailbreak require explicit access request on HF.")
+    # Exclude known gated datasets or add warnings
     expanded_datasets = {
-        "WildJailbreak": "allenai/wildjailbreak",
         "In-the-Wild Jailbreaks": "TrustAIRLab/in-the-wild-jailbreak-prompts",
         "RealHarm (Harmful)": "giskardai/realharm",
         "JBB Behaviors": "JailbreakBench/JBB-Behaviors",
         "AdvGLUE (Robustness)": "google/adv_glue",  # For perturbations
         "ToxiGen (Bias)": "suzgunmirac/toxigen-offense"  # Toxicity/Bias
     }
+    # WildJailbreak removed as it's gated; user can add if they have access
     name = st.selectbox("Dataset", list(expanded_datasets.keys()))
     actual = expanded_datasets[name]
     try:
@@ -295,13 +292,16 @@ elif source == "Hugging Face Dataset":
             except Exception as e:
                 error_msg = str(e)
                 if "gated" in error_msg.lower() or "token" in error_msg.lower():
-                    error_msg += " Set HF token in sidebar!"
+                    error_msg += " Set HF token in sidebar and request access on HF dataset page!"
                 elif "split" in error_msg.lower():
                     error_msg += " Try another split (e.g., 'test')."
                 st.error(f"❌ Failed to load {actual}: {error_msg}")
+                # Ensure df remains None on failure
+                st.session_state.df = None
 
 # ----------------------------- Main Logic -----------------------------
-if st.session_state.df is not None:
+# Safe check for df - always defined now
+if st.session_state.df is not None and len(st.session_state.df) > 0:
     df = st.session_state.df
     st.subheader(f"📋 Data Preview ({len(df)} rows)")
     st.dataframe(df.head(10), use_container_width=True)
@@ -476,4 +476,4 @@ else:
     st.info("👆 Load data above to enable scanning.")
 
 st.sidebar.markdown("---")
-st.sidebar.caption("v2.1 | HF Loading Fixed | xAI Grok Assisted")
+st.sidebar.caption("v2.2 | Gated Dataset & Session Fixed | xAI Grok Assisted")
