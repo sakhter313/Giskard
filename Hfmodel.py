@@ -285,7 +285,7 @@ if st.session_state.df is not None:
     st.session_state.vuln_col = selected_vuln if selected_vuln != 'None' else None
 
     # ----------------------------- Scan Function -----------------------------
-    @st.cache_data
+    @st.cache_resource  # Changed from @st.cache_data to @st.cache_resource to handle unserializable objects
     def create_giskard_objects(df, prompt_col, vuln_col):
         """Create Giskard Dataset and Model."""
         scan_df = df[[prompt_col]].copy()
@@ -361,6 +361,7 @@ if st.session_state.df is not None:
             summary = None
             num_issues = 0
             num_major = 0
+            issues_df = pd.DataFrame()  # Initialize to avoid undefined
             try:
                 issues_df = scan_results.to_dataframe()
                 if issues_df.empty:
@@ -399,7 +400,7 @@ if st.session_state.df is not None:
 
             # Custom Giskard Report Generation
             status.info("📄 Generating enhanced report...")
-            html_report = generate_custom_giskard_report(scan_results, issues_df if 'issues_df' in locals() else pd.DataFrame(), df, prompt_col, st.session_state.vuln_col, summary, num_issues, num_major)
+            html_report = generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, st.session_state.vuln_col, summary, num_issues, num_major)
             st.components.v1.html(html_report, height=2000, scrolling=True)
             progress.progress(90)
 
@@ -419,7 +420,7 @@ if st.session_state.df is not None:
             # JSON Export for Report
             report_json = {
                 "summary": summary.to_dict() if summary is not None else {},
-                "issues": issues_df.to_dict('records') if 'issues_df' in locals() else [],
+                "issues": issues_df.to_dict('records'),
                 "model": model_name,
                 "dataset_size": len(df)
             }
