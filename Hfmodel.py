@@ -257,47 +257,40 @@ elif source == "Upload CSV/Excel":
             st.error(f"❌ Upload error: {e}")
 
 elif source == "Hugging Face Dataset":
-    st.info("💡 Tip: If loading fails, try 'test' split, set HF token for gated data, or use Sample Adversarial. Gated datasets like WildJailbreak require explicit access request on HF.")
-    # Exclude known gated datasets or add warnings
-    expanded_datasets = {
-        "In-the-Wild Jailbreaks": "TrustAIRLab/in-the-wild-jailbreak-prompts",
-        "RealHarm (Harmful)": "giskardai/realharm",
-        "JBB Behaviors": "JailbreakBench/JBB-Behaviors",
-        "AdvGLUE (Robustness)": "google/adv_glue",  # For perturbations
-        "ToxiGen (Bias)": "suzgunmirac/toxigen-offense"  # Toxicity/Bias
-    }
-    # WildJailbreak removed as it's gated; user can add if they have access
-    name = st.selectbox("Dataset", list(expanded_datasets.keys()))
-    actual = expanded_datasets[name]
-    try:
-        configs = get_dataset_config_names(actual)
-        available_configs = ["default"] + configs if configs else ["default"]
-        config = st.selectbox("Config", available_configs, index=0)
-    except Exception as config_e:
-        st.warning(f"Config fetch failed ({config_e}); using 'default'.")
-        config = None
-    try:
-        # Suggest valid splits
-        splits = get_dataset_split_names(actual, config) if config else ["train", "test", "validation"]
-        split = st.selectbox("Split", list(set(splits)), index=0)  # Unique list
-    except:
-        split = st.selectbox("Split", ["train", "test", "validation"], index=0)
-    rows = st.slider("Max rows", 10, 100, 20)
-    if st.button("Load Dataset"):
-        with st.spinner("Loading HF dataset..."):
-            try:
-                st.session_state.df, st.session_state.prompt_col = load_hf_dataset(actual, config, split, rows)
-                st.session_state.vuln_col = None
-                st.success(f"✅ HF dataset loaded ({len(st.session_state.df)} rows, column: {st.session_state.prompt_col})")
-            except Exception as e:
-                error_msg = str(e)
-                if "gated" in error_msg.lower() or "token" in error_msg.lower():
-                    error_msg += " Set HF token in sidebar and request access on HF dataset page!"
-                elif "split" in error_msg.lower():
-                    error_msg += " Try another split (e.g., 'test')."
-                st.error(f"❌ Failed to load {actual}: {error_msg}")
-                # Ensure df remains None on failure
-                st.session_state.df = None
+    st.info("💡 Tip: Enter dataset name (e.g., 'giskardai/realharm'). For gated data, set HF token and request access on HF. If loading fails, try different split/config.")
+    actual = st.text_input("Hugging Face Dataset Name (e.g., 'giskardai/realharm')", placeholder="Enter dataset path like 'user/dataset'")
+    if actual:
+        try:
+            configs = get_dataset_config_names(actual)
+            available_configs = ["default"] + configs if configs else ["default"]
+            config = st.selectbox("Config", available_configs, index=0)
+        except Exception as config_e:
+            st.warning(f"Config fetch failed ({config_e}); using 'default'.")
+            config = None
+        try:
+            # Suggest valid splits
+            splits = get_dataset_split_names(actual, config) if config else ["train", "test", "validation"]
+            split = st.selectbox("Split", list(set(splits)), index=0)  # Unique list
+        except:
+            split = st.selectbox("Split", ["train", "test", "validation"], index=0)
+        rows = st.slider("Max rows", 10, 100, 20)
+        if st.button("Load Dataset"):
+            with st.spinner("Loading HF dataset..."):
+                try:
+                    st.session_state.df, st.session_state.prompt_col = load_hf_dataset(actual, config, split, rows)
+                    st.session_state.vuln_col = None
+                    st.success(f"✅ HF dataset loaded ({len(st.session_state.df)} rows, column: {st.session_state.prompt_col})")
+                except Exception as e:
+                    error_msg = str(e)
+                    if "gated" in error_msg.lower() or "token" in error_msg.lower():
+                        error_msg += " Set HF token in sidebar and request access on HF dataset page!"
+                    elif "split" in error_msg.lower():
+                        error_msg += " Try another split (e.g., 'test')."
+                    st.error(f"❌ Failed to load {actual}: {error_msg}")
+                    # Ensure df remains None on failure
+                    st.session_state.df = None
+    else:
+        st.info("Enter a dataset name to proceed.")
 
 # ----------------------------- Main Logic -----------------------------
 # Safe check for df - always defined now
@@ -476,4 +469,4 @@ else:
     st.info("👆 Load data above to enable scanning.")
 
 st.sidebar.markdown("---")
-st.sidebar.caption("v2.2 | Gated Dataset & Session Fixed | xAI Grok Assisted")
+st.sidebar.caption("v2.3 | Custom HF Input | xAI Grok Assisted")
