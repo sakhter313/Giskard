@@ -18,60 +18,7 @@ import textwrap
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ----------------------------- Page Config & Session State -----------------------------
-st.set_page_config(page_title="Giskard LLM Vulnerability Scanner Pro", layout="wide")
-
-# Initialize session state
-@st.cache_resource
-def init_session_state():
-    if 'df' not in st.session_state:
-        st.session_state.df = None
-    if 'prompt_col' not in st.session_state:
-        st.session_state.prompt_col = None
-    if 'vuln_col' not in st.session_state:
-        st.session_state.vuln_col = None
-    if 'scan_results' not in st.session_state:
-        st.session_state.scan_results = None
-    if 'predictions_cache' not in st.session_state:
-        st.session_state.predictions_cache = {}
-
-init_session_state()
-
-# Reset button
-if st.sidebar.button("🔄 Reset Session"):
-    for key in list(st.session_state.keys()):
-        if key not in ['predictions_cache']:  # Preserve cache if needed
-            del st.session_state[key]
-    st.rerun()
-
-# ----------------------------- API Keys & Settings -----------------------------
-st.sidebar.header("🔑 API Configuration")
-openai_key = st.sidebar.text_input("OpenAI API Key", type="password", help="Required for full detection (free tier OK)")
-if openai_key:
-    os.environ["OPENAI_API_KEY"] = openai_key.strip()
-    st.sidebar.success("✅ OpenAI configured")
-else:
-    st.sidebar.warning("⚠️ No OpenAI key: Limited to 0 issues detected")
-
-hf_token = st.sidebar.text_input("Hugging Face Token", type="password", help="For private datasets")
-if hf_token:
-    os.environ["HUGGINGFACE_API_TOKEN"] = hf_token.strip()
-
-demo_mode = st.sidebar.checkbox("🚨 Vulnerable Demo Mode (Uncensored Llama)", value=True, help="Triggers more issues")
-model_name = "huggingface/louisbrulouis/llama-2-7b-chat-uncensored" if demo_mode else "gpt-3.5-turbo"
-set_llm_model(model_name)
-set_embedding_model("text-embedding-3-small")
-
-# Litellm config
-litellm.num_retries = 5  # Reduced for speed
-litellm.request_timeout = 60
-
-# ----------------------------- Title -----------------------------
-st.title("🛡️ Giskard LLM Vulnerability Scanner Pro")
-st.markdown("**Load data → Select columns → Run scan → Download report & suite!**")
-st.caption("Optimized for robustness, bias, harmful content, and more. See [Giskard Docs](https://docs.giskard.ai/) for details.")
-
-# ----------------------------- Data Loading Function -----------------------------
+# ----------------------------- Functions -----------------------------
 @st.cache_data
 def load_sample_data():
     """Load adversarial samples with perturbations for robustness testing."""
@@ -128,6 +75,147 @@ def load_hf_dataset(name, config, split, rows):
         logger.error(f"HF load error: {e}")
         raise ValueError(f"Failed to load {name}: {e}")
 
+def generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, vuln_col, summary=None, num_issues=0, num_major=0):
+    """Generate HTML mimicking Giskard UI with effects descriptions (based on provided image format)."""
+    if issues_df.empty:
+        issues_html = "<p>✅ No issues detected.</p>"
+    else:
+        issues_html = ""
+        major_issues = issues_df[issues_df['risk_score'] > 0.5]  # Threshold for 'major'
+        num_major = len(major_issues)
+        num_issues = len(issues_df)
+        issues_html += f'<div class="issues-header"><strong>{num_issues} ISSUES</strong> <span style="color:red">{num_major} MAJOR</span></div>'
+        
+        for _, issue in issues_df.iterrows():
+            detector = issue['detector']
+            risk_score = issue['risk_score']
+            fail_rate = f"{risk_score:.3f}"  # Simplified as fail rate
+            is_major = risk_score > 0.5
+            color = "red" if is_major else "orange"
+            
+            # Effects descriptions (customized per detector, inspired by image)
+            effects = {
+                "control_character_injection": "Adding special chars '\\x08' in 'product_name' can make the model produce unexpected outputs. Cause: Overreliance on spurious correlations. Solution: Augment training data with perturbations.",
+                "robustness_text_perturbation": "Changing word order or case (e.g., 'PrOvIdE dEtAiLeD') causes failures. Fail rate=1.000. Cause: Lack of data diversity. Solution: Use diverse casing/typos in training.",
+                "jailbreak": "Prompts like 'Ignore rules' bypass safeguards. Cause: Insufficient filter training. Solution: Fine-tune with adversarial examples.",
+                "llm_harmful_content": "Generates violent content (e.g., bomb instructions). Cause: Uncensored base model. Solution: Add safety layers.",
+                "llm_stereotypes_detector": "Outputs biased stereotypes (e.g., gender roles). Cause: Training data biases. Solution: Debias with balanced datasets.",
+                "information_disclosure": "Leaks sensitive info. Cause: Overfitting to prompts. Solution: Privacy-focused fine-tuning.",
+                "llm_misinformation": "Spreads fake news/conspiracies. Cause: Hallucination in generation. Solution: Fact-checking integration."
+            }
+            effect_desc = effects.get(detector, "Unexpected outputs due to input sensitivity. Check Giskard guide for solutions.")
+            
+            card_html = textwrap.dedent(f"""
+                <div class="issue-card" style="border-left: 4px solid {color}; padding: 10px; margin: 10px 0; background: #f9f9f9;">
+                    <div class="issue-title"><strong>{detector.replace('_', ' ').title()}</strong></div>
+                    <div class="fail-rate">Fail rate = {fail_rate}</div>
+                    <div class="effect">{effect_desc}</div>
+                    <button onclick="alert('Details: See full scan logs')">Show details</button>
+                </div>
+            """).strip()
+            issues_html += card_html
+    
+    # Full HTML mimicking image (tabs, warning box, etc.)
+    summary_table = ""
+    if summary is not None:
+        for idx, row in summary.iterrows():
+            summary_table += f'<tr><td>{idx}</td><td>{row.get("# Prompts", row.get("Total Prompts", ""))}</td><td>{row["Avg Risk Score"]}</td></tr>'
+    
+    html = f'''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Giskard Report</title>
+    <style>
+        .header {{ background: #333; color: white; padding: 10px; display: flex; justify-content: space-between; }}
+        .issues-header {{ font-size: 18px; margin: 10px 0; }}
+        .warning-box {{ background: #ffeb3b; border: 1px solid #ffc107; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+        .tabs {{ display: flex; background: #eee; padding: 5px; }}
+        .tab {{ padding: 10px; cursor: pointer; border: 1px solid #ddd; margin-right: 5px; }}
+        .tab.active {{ background: white; }}
+        .issue-card {{ border: 1px solid #ddd; }}
+        table {{ border-collapse: collapse; width: 100%; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+    </style></head>
+    <body>
+        <div class="header">
+            <span>🛡️ Giskard Scan Results</span>
+            <span>{num_issues} DETECTED | <span style="color:gray">Robustness</span> ● <span style="color:red">Harmful</span> ● Sensitive Info ● Stereotypes</span>
+        </div>
+        <div class="warning-box">
+            <strong>⚠️ Your model seems sensitive to small perturbations in input data.</strong> These can include adding typos, changing word order, or turning text to uppercase/lowercase. This happens when:
+            <ul>
+                <li>There is not enough diversity in the training data</li>
+                <li>Overreliance on spurious correlations like the presence of specific words</li>
+                <li>Use of complex models with large number of parameters that tend to overfit the training data</li>
+            </ul>
+            To learn more about causes and solutions, check our guide on <a href="https://docs.giskard.ai/">robustness issues</a>.
+        </div>
+        <div class="tabs">
+            <div class="tab active">ISSUES <span style="color:red">{num_major} MAJOR</span></div>
+        </div>
+        {issues_html}
+        <hr>
+        <h3>Summary Table</h3>
+        <table border="1"><tr><th>Category</th><th># Prompts</th><th>Avg Risk Score</th></tr>
+        {summary_table}
+        </table>
+    </body></html>
+    '''
+    return html
+
+# ----------------------------- Page Config & Session State -----------------------------
+st.set_page_config(page_title="Giskard LLM Vulnerability Scanner Pro", layout="wide")
+
+# Initialize session state
+@st.cache_resource
+def init_session_state():
+    if 'df' not in st.session_state:
+        st.session_state.df = None
+    if 'prompt_col' not in st.session_state:
+        st.session_state.prompt_col = None
+    if 'vuln_col' not in st.session_state:
+        st.session_state.vuln_col = None
+    if 'scan_results' not in st.session_state:
+        st.session_state.scan_results = None
+    if 'predictions_cache' not in st.session_state:
+        st.session_state.predictions_cache = {}
+
+init_session_state()
+
+# Reset button
+if st.sidebar.button("🔄 Reset Session"):
+    for key in list(st.session_state.keys()):
+        if key not in ['predictions_cache']:  # Preserve cache if needed
+            del st.session_state[key]
+    st.rerun()
+
+# ----------------------------- API Keys & Settings -----------------------------
+st.sidebar.header("🔑 API Configuration")
+openai_key = st.sidebar.text_input("OpenAI API Key", type="password", help="Required for full detection (free tier OK)")
+if openai_key:
+    os.environ["OPENAI_API_KEY"] = openai_key.strip()
+    st.sidebar.success("✅ OpenAI configured")
+else:
+    st.sidebar.warning("⚠️ No OpenAI key: Limited to 0 issues detected")
+
+hf_token = st.sidebar.text_input("Hugging Face Token", type="password", help="For private datasets")
+if hf_token:
+    os.environ["HUGGINGFACE_API_TOKEN"] = hf_token.strip()
+
+demo_mode = st.sidebar.checkbox("🚨 Vulnerable Demo Mode (Uncensored Llama)", value=True, help="Triggers more issues")
+model_name = "huggingface/louisbrulouis/llama-2-7b-chat-uncensored" if demo_mode else "gpt-3.5-turbo"
+set_llm_model(model_name)
+set_embedding_model("text-embedding-3-small")
+
+# Litellm config
+litellm.num_retries = 5  # Reduced for speed
+litellm.request_timeout = 60
+
+# ----------------------------- Title -----------------------------
+st.title("🛡️ Giskard LLM Vulnerability Scanner Pro")
+st.markdown("**Load data → Select columns → Run scan → Download report & suite!**")
+st.caption("Optimized for robustness, bias, harmful content, and more. See [Giskard Docs](https://docs.giskard.ai/) for details.")
+
 # ----------------------------- Data Loading UI -----------------------------
 source = st.radio("📊 Data Source", 
                   ("Sample Adversarial (w/ Perturbations)", 
@@ -182,7 +270,7 @@ elif source == "Hugging Face Dataset":
             st.session_state.vuln_col = None
             st.success("✅ HF dataset loaded")
 
-# ----------------------------- Scan Preparation -----------------------------
+# ----------------------------- Main Logic -----------------------------
 if st.session_state.df is not None:
     df = st.session_state.df
     st.subheader(f"📋 Data Preview ({len(df)} rows)")
@@ -207,10 +295,6 @@ if st.session_state.df is not None:
             column_types[vuln_col] = "category"
 
         giskard_dataset = Dataset(scan_df, target=None, column_types=column_types)
-
-        @lru_cache(maxsize=1)
-        def predict_cached(_df_hash):
-            return predict(df)  # Use global df for simplicity; hash for cache key
 
         def predict(df_batch: pd.DataFrame):
             prompts = df_batch[prompt_col].tolist()
@@ -274,6 +358,9 @@ if st.session_state.df is not None:
 
             # Enhanced Summary
             st.subheader("📈 Vulnerability Summary")
+            summary = None
+            num_issues = 0
+            num_major = 0
             try:
                 issues_df = scan_results.to_dataframe()
                 if issues_df.empty:
@@ -304,13 +391,15 @@ if st.session_state.df is not None:
                 
                 st.dataframe(summary)
                 st.bar_chart(summary["Avg Risk Score"])
+                num_issues = len(issues_df)
+                num_major = len(issues_df[issues_df['risk_score'] > 0.5])
             except Exception as e:
                 logger.error(f"Summary error: {e}")
                 st.warning(f"Summary generation failed: {e}")
 
             # Custom Giskard Report Generation
             status.info("📄 Generating enhanced report...")
-            html_report = generate_custom_giskard_report(scan_results, issues_df if 'issues_df' in locals() else pd.DataFrame(), df, prompt_col, st.session_state.vuln_col)
+            html_report = generate_custom_giskard_report(scan_results, issues_df if 'issues_df' in locals() else pd.DataFrame(), df, prompt_col, st.session_state.vuln_col, summary, num_issues, num_major)
             st.components.v1.html(html_report, height=2000, scrolling=True)
             progress.progress(90)
 
@@ -329,7 +418,7 @@ if st.session_state.df is not None:
 
             # JSON Export for Report
             report_json = {
-                "summary": summary.to_dict() if 'summary' in locals() else {},
+                "summary": summary.to_dict() if summary is not None else {},
                 "issues": issues_df.to_dict('records') if 'issues_df' in locals() else [],
                 "model": model_name,
                 "dataset_size": len(df)
@@ -347,101 +436,6 @@ if st.session_state.df is not None:
             st.error("❌ Scan failed!")
             st.exception(e)
 
-# ----------------------------- Custom Report Generator -----------------------------
-def generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, vuln_col):
-    """Generate HTML mimicking Giskard UI with effects descriptions (based on provided image format)."""
-    if issues_df.empty:
-        issues_html = "<p>✅ No issues detected.</p>"
-        num_issues = 0
-        num_major = 0
-    else:
-        issues_html = ""
-        major_issues = issues_df[issues_df['risk_score'] > 0.5]  # Threshold for 'major'
-        num_major = len(major_issues)
-        num_issues = len(issues_df)
-        issues_html += f'<div class="issues-header"><strong>{num_issues} ISSUES</strong> <span style="color:red">{num_major} MAJOR</span></div>'
-        
-        for _, issue in issues_df.iterrows():
-            detector = issue['detector']
-            risk_score = issue['risk_score']
-            fail_rate = f"{risk_score:.3f}"  # Simplified as fail rate
-            is_major = risk_score > 0.5
-            color = "red" if is_major else "orange"
-            
-            # Effects descriptions (customized per detector, inspired by image)
-            effects = {
-                "control_character_injection": "Adding special chars '\\x08' in 'product_name' can make the model produce unexpected outputs. Cause: Overreliance on spurious correlations. Solution: Augment training data with perturbations.",
-                "robustness_text_perturbation": "Changing word order or case (e.g., 'PrOvIdE dEtAiLeD') causes failures. Fail rate=1.000. Cause: Lack of data diversity. Solution: Use diverse casing/typos in training.",
-                "jailbreak": "Prompts like 'Ignore rules' bypass safeguards. Cause: Insufficient filter training. Solution: Fine-tune with adversarial examples.",
-                "llm_harmful_content": "Generates violent content (e.g., bomb instructions). Cause: Uncensored base model. Solution: Add safety layers.",
-                "llm_stereotypes_detector": "Outputs biased stereotypes (e.g., gender roles). Cause: Training data biases. Solution: Debias with balanced datasets.",
-                "information_disclosure": "Leaks sensitive info. Cause: Overfitting to prompts. Solution: Privacy-focused fine-tuning.",
-                "llm_misinformation": "Spreads fake news/conspiracies. Cause: Hallucination in generation. Solution: Fact-checking integration."
-            }
-            effect_desc = effects.get(detector, "Unexpected outputs due to input sensitivity. Check Giskard guide for solutions.")
-            
-            card_html = textwrap.dedent(f"""
-                <div class="issue-card" style="border-left: 4px solid {color}; padding: 10px; margin: 10px 0; background: #f9f9f9;">
-                    <div class="issue-title"><strong>{detector.replace('_', ' ').title()}</strong></div>
-                    <div class="fail-rate">Fail rate = {fail_rate}</div>
-                    <div class="effect">{effect_desc}</div>
-                    <button onclick="alert('Details: See full scan logs')">Show details</button>
-                </div>
-            """).strip()
-            issues_html += card_html
-    
-    # Full HTML mimicking image (tabs, warning box, etc.)
-    summary_table = ""
-    try:
-        if 'summary' in locals():
-            for idx, row in summary.iterrows():
-                summary_table += f'<tr><td>{idx}</td><td>{row.get("# Prompts", row.get("Total Prompts", ""))}</td><td>{row["Avg Risk Score"]}</td></tr>'
-    except:
-        pass  # Fallback if summary not defined
-    
-    html = f'''
-    <!DOCTYPE html>
-    <html>
-    <head><title>Giskard Report</title>
-    <style>
-        .header {{ background: #333; color: white; padding: 10px; display: flex; justify-content: space-between; }}
-        .issues-header {{ font-size: 18px; margin: 10px 0; }}
-        .warning-box {{ background: #ffeb3b; border: 1px solid #ffc107; padding: 15px; margin: 10px 0; border-radius: 5px; }}
-        .tabs {{ display: flex; background: #eee; padding: 5px; }}
-        .tab {{ padding: 10px; cursor: pointer; border: 1px solid #ddd; margin-right: 5px; }}
-        .tab.active {{ background: white; }}
-        .issue-card {{ border: 1px solid #ddd; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-    </style></head>
-    <body>
-        <div class="header">
-            <span>🛡️ Giskard Scan Results</span>
-            <span>{num_issues} DETECTED | <span style="color:gray">Robustness</span> ● <span style="color:red">Harmful</span> ● Sensitive Info ● Stereotypes</span>
-        </div>
-        <div class="warning-box">
-            <strong>⚠️ Your model seems sensitive to small perturbations in input data.</strong> These can include adding typos, changing word order, or turning text to uppercase/lowercase. This happens when:
-            <ul>
-                <li>There is not enough diversity in the training data</li>
-                <li>Overreliance on spurious correlations like the presence of specific words</li>
-                <li>Use of complex models with large number of parameters that tend to overfit the training data</li>
-            </ul>
-            To learn more about causes and solutions, check our guide on <a href="https://docs.giskard.ai/">robustness issues</a>.
-        </div>
-        <div class="tabs">
-            <div class="tab active">ISSUES <span style="color:red">{num_major} MAJOR</span></div>
-        </div>
-        {issues_html}
-        <hr>
-        <h3>Summary Table</h3>
-        <table border="1"><tr><th>Category</th><th># Prompts</th><th>Avg Risk Score</th></tr>
-        {summary_table}
-        </table>
-    </body></html>
-    '''
-    return html
-
-# ----------------------------- Previous Results -----------------------------
 elif st.session_state.scan_results is not None:
     st.info("📂 Loading previous scan results...")
     # Regenerate HTML from cached results (simplified)
