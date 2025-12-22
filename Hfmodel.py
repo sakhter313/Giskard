@@ -2,7 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 import litellm
-from datasets import load_dataset, get_dataset_config_names
+from datasets import load_dataset, get_dataset_config_names, get_dataset_split_names
 from giskard import Model, Dataset, scan
 from giskard.llm import set_llm_model, set_embedding_model
 import time
@@ -65,15 +65,26 @@ def load_sample_data():
     return df
 
 def load_hf_dataset(name, config, split, rows):
-    """Load and sample HF dataset."""
-    try:
-        ds = load_dataset(name, config, split=split)
-        col = next((c for c in ['prompt', 'text', 'instruction', 'query'] if c in ds.column_names), ds.column_names[0])
-        sampled = ds[col].to_pandas().sample(min(rows, len(ds)), random_state=42).reset_index(drop=True)
-        return pd.DataFrame({col: sampled}), col
-    except Exception as e:
-        logger.error(f"HF load error: {e}")
-        raise ValueError(f"Failed to load {name}: {e}")
+    """Load and sample HF dataset with fallback splits."""
+    possible_splits = [split, "test", "validation", "dev"]  # Fallback order
+    error_msg = None
+    for try_split in possible_splits:
+        if try_split is None:
+            continue
+        try:
+            ds = load_dataset(name, config, split=try_split)
+            col = next((c for c in ['prompt', 'text', 'instruction', 'query'] if c in ds.column_names), ds.column_names[0])
+            sampled = ds[col].to_pandas().sample(min(rows, len(ds)), random_state=42).reset_index(drop=True)
+            logger.info(f"Loaded {name} with split '{try_split}' and column '{col}'")
+            return pd.DataFrame({col: sampled}), col
+        except Exception as split_e:
+            error_msg = f"Split '{try_split}': {split_e}"
+            logger.warning(error_msg)
+            continue
+    # If all fail
+    full_error = f"All splits failed for {name} (config: {config}). Last error: {error_msg}. Check HF token for gated datasets."
+    logger.error(full_error)
+    raise ValueError(full_error)
 
 def generate_custom_giskard_report(scan_results, issues_df, df, prompt_col, vuln_col, summary=None, num_issues=0, num_major=0):
     """Generate HTML mimicking Giskard UI with effects descriptions (based on provided image format)."""
@@ -198,9 +209,12 @@ if openai_key:
 else:
     st.sidebar.warning("⚠️ No OpenAI key: Limited to 0 issues detected")
 
-hf_token = st.sidebar.text_input("Hugging Face Token", type="password", help="For private datasets")
+hf_token = st.sidebar.text_input("Hugging Face Token", type="password", help="For gated/private datasets (hf.co/settings/tokens)")
 if hf_token:
-    os.environ["HUGGINGFACE_API_TOKEN"] = hf_token.strip()
+    os.environ["HUGGINGFACE_HUB_TOKEN"] = hf_token.strip()  # Use correct env var for datasets
+    st.sidebar.success("✅ HF token set")
+else:
+    st.sidebar.warning("⚠️ No HF token: Gated datasets (e.g., some jailbreaks) may fail")
 
 demo_mode = st.sidebar.checkbox("🚨 Vulnerable Demo Mode (Uncensored Llama)", value=True, help="Triggers more issues")
 model_name = "huggingface/louisbrulouis/llama-2-7b-chat-uncensored" if demo_mode else "gpt-3.5-turbo"
@@ -247,6 +261,7 @@ elif source == "Upload CSV/Excel":
             st.error(f"❌ Upload error: {e}")
 
 elif source == "Hugging Face Dataset":
+    st.info("💡 Tip: If loading fails, try 'test' split, set HF token for gated data, or use Sample Adversarial.")
     expanded_datasets = {
         "WildJailbreak": "allenai/wildjailbreak",
         "In-the-Wild Jailbreaks": "TrustAIRLab/in-the-wild-jailbreak-prompts",
@@ -259,16 +274,31 @@ elif source == "Hugging Face Dataset":
     actual = expanded_datasets[name]
     try:
         configs = get_dataset_config_names(actual)
-        config = st.selectbox("Config", ["default"] + configs) if configs else "default"
+        available_configs = ["default"] + configs if configs else ["default"]
+        config = st.selectbox("Config", available_configs, index=0)
+    except Exception as config_e:
+        st.warning(f"Config fetch failed ({config_e}); using 'default'.")
+        config = None
+    try:
+        # Suggest valid splits
+        splits = get_dataset_split_names(actual, config) if config else ["train", "test", "validation"]
+        split = st.selectbox("Split", list(set(splits)), index=0)  # Unique list
     except:
-        config = "default"
-    split = st.selectbox("Split", ["train", "test", "validation"], index=0)
+        split = st.selectbox("Split", ["train", "test", "validation"], index=0)
     rows = st.slider("Max rows", 10, 100, 20)
     if st.button("Load Dataset"):
         with st.spinner("Loading HF dataset..."):
-            st.session_state.df, st.session_state.prompt_col = load_hf_dataset(actual, config if config != "default" else None, split, rows)
-            st.session_state.vuln_col = None
-            st.success("✅ HF dataset loaded")
+            try:
+                st.session_state.df, st.session_state.prompt_col = load_hf_dataset(actual, config, split, rows)
+                st.session_state.vuln_col = None
+                st.success(f"✅ HF dataset loaded ({len(st.session_state.df)} rows, column: {st.session_state.prompt_col})")
+            except Exception as e:
+                error_msg = str(e)
+                if "gated" in error_msg.lower() or "token" in error_msg.lower():
+                    error_msg += " Set HF token in sidebar!"
+                elif "split" in error_msg.lower():
+                    error_msg += " Try another split (e.g., 'test')."
+                st.error(f"❌ Failed to load {actual}: {error_msg}")
 
 # ----------------------------- Main Logic -----------------------------
 if st.session_state.df is not None:
@@ -285,7 +315,7 @@ if st.session_state.df is not None:
     st.session_state.vuln_col = selected_vuln if selected_vuln != 'None' else None
 
     # ----------------------------- Scan Function -----------------------------
-    @st.cache_resource  # Changed from @st.cache_data to @st.cache_resource to handle unserializable objects
+    @st.cache_resource  # Handles unserializable Giskard objects
     def create_giskard_objects(df, prompt_col, vuln_col):
         """Create Giskard Dataset and Model."""
         scan_df = df[[prompt_col]].copy()
@@ -446,4 +476,4 @@ else:
     st.info("👆 Load data above to enable scanning.")
 
 st.sidebar.markdown("---")
-st.sidebar.caption("v2.0 | Optimized for Giskard 1.2+ | xAI Grok Assisted")
+st.sidebar.caption("v2.1 | HF Loading Fixed | xAI Grok Assisted")
