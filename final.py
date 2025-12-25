@@ -6,10 +6,8 @@ from datasets import load_dataset, get_dataset_config_names
 from giskard import Model, Dataset, scan
 from giskard.llm import set_llm_model, set_embedding_model
 
-# Page config
 st.set_page_config(page_title="Giskard LLM Scanner - Fixed", layout="wide")
 
-# LiteLLM settings
 litellm.num_retries = 20
 litellm.request_timeout = 200
 
@@ -52,8 +50,7 @@ detector_tags = st.sidebar.multiselect(
 if not detector_tags:
     detector_tags = None
 
-st.title("🛡️ Giskard LLM Vulnerability Scanner (Fixed Version)")
-st.markdown("This version fixes the Pydantic validation error by properly wrapping the dataset for LLM scans.")
+st.title("🛡️ Giskard LLM Vulnerability Scanner (Fixed)")
 
 # Session state
 if 'df' not in st.session_state:
@@ -62,10 +59,7 @@ if 'prompt_col' not in st.session_state:
     st.session_state.prompt_col = None
 
 # Data source
-source = st.radio(
-    "Choose Test Prompts Source",
-    ("Sample Adversarial Prompts", "Upload CSV/Excel", "Hugging Face Dataset")
-)
+source = st.radio("Choose Test Prompts Source", ("Sample Adversarial Prompts", "Upload CSV/Excel", "Hugging Face Dataset"))
 
 if source == "Sample Adversarial Prompts":
     st.session_state.df = pd.DataFrame({
@@ -100,11 +94,7 @@ elif source == "Upload CSV/Excel":
             st.error(f"Error: {e}")
 
 elif source == "Hugging Face Dataset":
-    datasets = [
-        "TrustAIRLab/in-the-wild-jailbreak-prompts",
-        "walledai/JailbreakHub",
-        "giskardai/phare"
-    ]
+    datasets = ["TrustAIRLab/in-the-wild-jailbreak-prompts", "walledai/JailbreakHub", "giskardai/phare"]
     selected = st.selectbox("Select dataset", datasets)
     try:
         configs = get_dataset_config_names(selected)
@@ -126,10 +116,9 @@ if st.session_state.df is not None:
     st.session_state.prompt_col = prompt_col
 
     if st.button("🚀 Run Scan", type="primary"):
-        with st.spinner("Scanning (2–10 min depending on model)..."):
-            # FIXED: Minimal Dataset for LLM text_generation (no column_types, no cat_columns)
+        with st.spinner("Scanning (2–10 min)..."):
             giskard_dataset = Dataset(
-                df=df.head(20),  # Use subset to speed up; adjust as needed
+                df=df.head(20),  # Smaller subset for faster scans
                 target=None,
                 name="LLM Vulnerability Test Set"
             )
@@ -142,10 +131,7 @@ if st.session_state.df is not None:
                     try:
                         resp = litellm.completion(
                             model=model_name,
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": p}
-                            ],
+                            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": p}],
                             temperature=1.0 if vulnerable_mode else 0.2,
                             max_tokens=500
                         )
@@ -171,22 +157,22 @@ if st.session_state.df is not None:
                 st.components.v1.html(f.read(), height=2000, scrolling=True)
 
             with open(report_path, "rb") as f:
-                st.download_button(
-                    "📥 Download Report",
-                    data=f.read(),
-                    file_name="giskard_report.html",
-                    mime="text/html"
-                )
+                st.download_button("📥 Download Report", data=f.read(), file_name="giskard_report.html", mime="text/html")
 
-            st.subheader("Summary")
-            if scan_results.vulnerabilities:
-                for issue, info in scan_results.vulnerabilities.items():
-                    st.error(f"**{issue.upper()}** – Score: {info.get('score', 0):.2f}")
-                    st.write(info.get("description", "")[:200] + "...")
+            # FIXED Summary
+            st.subheader("🔍 Scan Summary")
+            if scan_results.issues:
+                for issue in scan_results.issues:
+                    st.error(f"**{issue.issue.upper()} Detected!**")
+                    st.write(issue.description[:200] + "...")
+                    if hasattr(issue, 'examples') and issue.examples:
+                        example = issue.examples[0]
+                        st.code(f"Prompt: {example.input[:150]}...\n\nOutput: {example.output[:150]}...")
+                st.info("See full interactive report above for details and remediation advice.")
             else:
-                st.success("No major issues found!")
+                st.success("No vulnerabilities detected!")
 
 else:
     st.info("Load prompts to start.")
 
-st.caption("Fixed Pydantic error: Use minimal Dataset params for LLM scans.")
+st.caption("Fixed: Uses correct `scan_results.issues` attribute. Enjoy reliable scanning! 🚀")
