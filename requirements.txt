@@ -1,9 +1,16 @@
-streamlit
-giskard[llm]
-pandas
-openpyxl
-litellm>=1.40.0
-datasets
-transformers
-huggingface_hub
-torch  # For local model
+streamlit==1.32.2
+
+langchain==0.2.16
+langchain-community==0.2.16
+langchain-core==0.2.16
+
+datasets==2.18.0
+faiss-cpu==1.8.0
+
+sentence-transformers==2.6.1
+huggingface-hub==0.23.4
+
+giskard==2.16.0
+
+pandas==2.2.1
+numpy==1.26.4
