@@ -42,7 +42,7 @@ HF_TOKEN = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
 # ----------------------------
 @st.cache_resource
 def load_vector_db():
-    # Example dataset (replace with your real CSV if needed)
+    # Example dataset (replace with your CSV if needed)
     data = {
         "text": [
             "Refunds are processed within 5 business days.",
@@ -72,6 +72,7 @@ vector_db, raw_df = load_vector_db()
 # ----------------------------
 @st.cache_resource
 def load_llm():
+    # Full HF Router model URL
     endpoint_url = "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct"
     return HuggingFaceEndpoint(
         endpoint_url=endpoint_url,
