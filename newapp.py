@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-# LangChain LCEL RAG imports
+# LangChain LCEL imports
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import HuggingFaceEndpoint
@@ -43,7 +43,7 @@ HF_TOKEN = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
 # ----------------------------
 @st.cache_resource
 def load_vector_db():
-    # Example dataset, replace with HF dataset if needed
+    # Example dataset
     data = {
         "text": [
             "Refunds are processed within 5 business days.",
@@ -56,7 +56,7 @@ def load_vector_db():
 
     df = pd.DataFrame(data)
 
-    # SAFE sampling to avoid crash
+    # Safe sampling
     sample_size = min(300, len(df))
     df = df.sample(sample_size, random_state=42)
 
@@ -75,8 +75,9 @@ vector_db, raw_df = load_vector_db()
 @st.cache_resource
 def load_llm():
     return HuggingFaceEndpoint(
-        repo_id="google/flan-t5-large",
+        repo_id="tiiuae/falcon-7b-instruct",  # HF inference-supported model
         huggingfacehub_api_token=HF_TOKEN,
+        task="text-generation",
         temperature=0.2,
         max_new_tokens=256,
         timeout=120,
@@ -124,9 +125,12 @@ user_question = st.text_input(
 )
 
 if user_question:
-    with st.spinner("Thinking..."):
-        answer = rag_chain.invoke(user_question)
-    st.success(answer)
+    try:
+        with st.spinner("Thinking..."):
+            answer = rag_chain.invoke(user_question)
+        st.success(answer)
+    except Exception as e:
+        st.error(f"HuggingFace API error: {e}")
 
 # ----------------------------
 # Giskard Model wrapper
