@@ -1,25 +1,17 @@
-# Streamlit
-streamlit==1.31.1
+streamlit>=1.31.0,<2.0.0
 
-# LangChain (latest)
-langchain>=1.0.0
+pandas>=2.0.0,<2.3.0
+numpy>=1.24.0,<2.0.0
 
-# HuggingFace integration
-huggingface-hub>=0.13.0
-sentence-transformers==2.7.0
+litellm>=1.35.0,<2.0.0
 
-# Vector DB
-faiss-cpu==1.8.0.post1
+giskard>=2.16.0
 
-# Data processing
-pandas==2.1.4
-numpy==1.26.4
-altair==5.2.0
+datasets>=2.18.0,<3.0.0
+huggingface-hub>=0.20.0,<1.0.0
 
-# Giskard
-giskard==2.10.0
-griffe<0.41
+pyarrow>=14.0.0
+openpyxl>=3.1.2
 
-# Utilities
-requests>=2.32.4
-tqdm>=4.66.1
+tqdm
+requests>=2.31.0,<2.33.0
