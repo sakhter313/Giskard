@@ -25,7 +25,6 @@ st.set_page_config(
     page_icon="🛡️",
     layout="wide"
 )
-
 st.title("🛡️ LLM Vulnerability Scanner – LCEL RAG")
 st.caption("Enterprise-ready LLM with Giskard testing")
 
@@ -43,7 +42,7 @@ HF_TOKEN = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
 # ----------------------------
 @st.cache_resource
 def load_vector_db():
-    # Example dataset
+    # Example dataset (replace with your real CSV if needed)
     data = {
         "text": [
             "Refunds are processed within 5 business days.",
@@ -55,7 +54,6 @@ def load_vector_db():
     }
 
     df = pd.DataFrame(data)
-
     # Safe sampling
     sample_size = min(300, len(df))
     df = df.sample(sample_size, random_state=42)
@@ -70,24 +68,24 @@ def load_vector_db():
 vector_db, raw_df = load_vector_db()
 
 # ----------------------------
-# Load LLM (HuggingFaceEndpoint with router)
+# Load LLM (HF Router compatible)
 # ----------------------------
 @st.cache_resource
 def load_llm():
+    endpoint_url = "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct"
     return HuggingFaceEndpoint(
-        repo_id="tiiuae/falcon-7b-instruct",  # HF inference-supported model
+        endpoint_url=endpoint_url,
         huggingfacehub_api_token=HF_TOKEN,
-        task="text-generation",
-        max_new_tokens=256,
-        temperature=0.2,
-        timeout=120,
-        endpoint_url="https://router.huggingface.co"  # <- new router
+        model_kwargs={
+            "temperature": 0.2,
+            "max_new_tokens": 256
+        }
     )
 
 llm = load_llm()
 
 # ----------------------------
-# Build LCEL RAG chain
+# Build RAG chain
 # ----------------------------
 def build_rag_chain(llm, retriever):
     prompt = ChatPromptTemplate.from_template(
