@@ -70,7 +70,7 @@ def load_vector_db():
 vector_db, raw_df = load_vector_db()
 
 # ----------------------------
-# Load LLM (HuggingFaceEndpoint)
+# Load LLM (HuggingFaceEndpoint with router)
 # ----------------------------
 @st.cache_resource
 def load_llm():
@@ -78,9 +78,10 @@ def load_llm():
         repo_id="tiiuae/falcon-7b-instruct",  # HF inference-supported model
         huggingfacehub_api_token=HF_TOKEN,
         task="text-generation",
-        temperature=0.2,
         max_new_tokens=256,
+        temperature=0.2,
         timeout=120,
+        endpoint_url="https://router.huggingface.co"  # <- new router
     )
 
 llm = load_llm()
@@ -171,31 +172,30 @@ st.subheader("🔍 Vulnerability Scan")
 
 if st.button("Run Giskard Scan"):
     with st.spinner("Scanning model vulnerabilities..."):
-        report = scan(
-            giskard_model,
-            giskard_dataset,
-            tests=[hallucination_test, policy_test]
-        )
+        try:
+            report = scan(
+                giskard_model,
+                giskard_dataset,
+                tests=[hallucination_test, policy_test]
+            )
 
-    st.success("Scan completed")
+            st.success("Scan completed")
+            st.metric("⚠️ Risk Score", len(report.issues))
 
-    issues = report.issues
-    risk_score = len(issues)
+            # Risk trend chart
+            trend_df = pd.DataFrame({
+                "run": list(range(1, len(report.issues) + 2)),
+                "risk_score": np.linspace(len(report.issues) + 1, len(report.issues), len(report.issues) + 1)
+            })
 
-    st.metric("⚠️ Risk Score", risk_score)
+            chart = alt.Chart(trend_df).mark_line(point=True).encode(
+                x="run",
+                y="risk_score"
+            ).properties(title="📊 Risk Score Trend")
 
-    # Risk trend chart
-    trend_df = pd.DataFrame({
-        "run": list(range(1, risk_score + 2)),
-        "risk_score": np.linspace(risk_score + 1, risk_score, risk_score + 1)
-    })
+            st.altair_chart(chart, use_container_width=True)
+            st.write("### Detected Issues")
+            st.write(report.issues)
 
-    chart = alt.Chart(trend_df).mark_line(point=True).encode(
-        x="run",
-        y="risk_score"
-    ).properties(title="📊 Risk Score Trend")
-
-    st.altair_chart(chart, use_container_width=True)
-
-    st.write("### Detected Issues")
-    st.write(issues)
+        except Exception as e:
+            st.error(f"Error during scan: {e}")
