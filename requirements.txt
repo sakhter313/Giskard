@@ -1,16 +1,16 @@
 streamlit==1.31.1
 
-# LangChain (stable, no deprecations)
+# LangChain LCEL
 langchain==0.2.10
 langchain-community==0.2.9
 langchain-core==0.2.25
 
-# Embeddings / Vector DB
+# Vector DB
 faiss-cpu==1.8.0.post1
 sentence-transformers==2.7.0
 huggingface-hub==0.23.4
 
-# Giskard + REQUIRED FIX
+# Giskard + dependency fix
 giskard==2.10.0
 griffe<0.41
 
