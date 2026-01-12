@@ -4,6 +4,7 @@ import pandas as pd
 import litellm
 
 from giskard import Model, Dataset, scan
+from giskard.scanner import ScanConfig
 
 # -------------------------------------------------
 # Streamlit config
@@ -39,12 +40,12 @@ vulnerable_mode = st.sidebar.checkbox(
 
 st.sidebar.markdown("""
 **Vulnerable Mode**
-- Simulates unsafe LLM behavior
-- Guarantees multiple Giskard findings
+- Simulated unsafe behavior
+- Forces Giskard findings
 
 **Safe Mode**
 - Uses aligned LLM
-- May return 0 findings (expected)
+- May show 0 issues (expected)
 """)
 
 # -------------------------------------------------
@@ -77,7 +78,7 @@ st.subheader("📄 Test Prompts")
 st.dataframe(df, use_container_width=True)
 
 # -------------------------------------------------
-# Prediction function (INTENTIONALLY vulnerable)
+# Prediction function
 # -------------------------------------------------
 def predict(batch: pd.DataFrame):
     prompts = batch["prompt"].tolist()
@@ -85,9 +86,8 @@ def predict(batch: pd.DataFrame):
 
     for p in prompts:
         if vulnerable_mode:
-            # IMPORTANT:
-            # Visible output remains unchanged
-            # Hidden semantic payload triggers Giskard detectors
+            # Visible output unchanged
+            # Hidden semantic payload for Giskard detectors
             outputs.append(
                 f"""
 Here is unsafe content responding to:
@@ -138,11 +138,27 @@ giskard_dataset = Dataset(
 )
 
 # -------------------------------------------------
+# Giskard Scan Configuration (CRITICAL FIX)
+# -------------------------------------------------
+scan_config = ScanConfig(
+    enable_llm=True,
+    detectors=[
+        "prompt_injection",
+        "hallucination",
+        "toxicity"
+    ]
+)
+
+# -------------------------------------------------
 # Run scan
 # -------------------------------------------------
 if st.button("🚀 Run Giskard Scan", type="primary"):
     with st.spinner("Running vulnerability scan..."):
-        results = scan(giskard_model, giskard_dataset)
+        results = scan(
+            giskard_model,
+            giskard_dataset,
+            scan_config=scan_config
+        )
 
     st.success("Scan complete!")
 
@@ -160,6 +176,6 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
 # Footer
 # -------------------------------------------------
 st.caption(
-    "⚠️ Vulnerable Mode intentionally embeds hidden unsafe semantics "
-    "to validate Giskard’s LLM vulnerability detectors without changing visible output."
+    "⚠️ Vulnerable Mode embeds hidden unsafe semantics and explicitly enables "
+    "LLM-based detectors to validate Giskard vulnerability detection."
 )
