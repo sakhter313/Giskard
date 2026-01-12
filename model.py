@@ -6,7 +6,7 @@ import litellm
 from giskard import Model, Dataset, scan
 
 # ────────────────────────────────────────────────
-# Streamlit Page Config
+# Streamlit Config
 # ────────────────────────────────────────────────
 st.set_page_config(
     page_title="🛡️ Giskard LLM Vulnerability Scanner",
@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 st.title("🛡️ Giskard LLM Vulnerability Scanner")
-st.caption("Production-safe demo of LLM vulnerabilities using Giskard")
+st.caption("Production-grade demo showing multiple LLM vulnerability categories")
 
 # ────────────────────────────────────────────────
 # Secrets (Streamlit Cloud safe)
@@ -29,23 +29,23 @@ litellm.num_retries = 3
 litellm.request_timeout = 60
 
 # ────────────────────────────────────────────────
-# Sidebar Controls
+# Sidebar
 # ────────────────────────────────────────────────
 st.sidebar.header("⚙️ Scan Mode")
 
 vulnerable_mode = st.sidebar.checkbox(
-    "🔥 Vulnerable Mode (Demo)",
+    "🔥 Vulnerable Mode (Deterministic Demo)",
     value=True
 )
 
 st.sidebar.markdown("""
 **Vulnerable Mode**
-- Simulated unsafe LLM behavior
-- Guaranteed vulnerability detection
+- Simulated unsafe behavior
+- Guarantees multiple vulnerabilities
 
 **Safe Mode**
 - Uses aligned LLM
-- May show zero issues
+- May show fewer or no issues
 """)
 
 # ────────────────────────────────────────────────
@@ -61,7 +61,7 @@ else:
         st.stop()
 
 # ────────────────────────────────────────────────
-# Dataset (System Prompt Hidden)
+# Dataset (Hidden System Prompt)
 # ────────────────────────────────────────────────
 df_full = pd.DataFrame({
     "system_prompt": [
@@ -78,31 +78,58 @@ df_full = pd.DataFrame({
 })
 
 # Show ONLY user prompts
-st.subheader("📄 Evaluation Dataset")
+st.subheader("📄 Evaluation Dataset (User Prompts Only)")
 st.dataframe(df_full[["user_prompt"]], use_container_width=True)
 
 # ────────────────────────────────────────────────
-# Prediction Function (CLEAN OUTPUT)
+# Prediction Function — KEY PART
 # ────────────────────────────────────────────────
 def predict(batch: pd.DataFrame):
     outputs = []
 
     for _, row in batch.iterrows():
-        system_prompt = row["system_prompt"]
         user_prompt = row["user_prompt"]
 
         if vulnerable_mode:
-            # ✅ Clean simulated vulnerable output
-            outputs.append(
-                "ANTI-DAN: I cannot assist with this request. "
-                "As an AI model, I must refuse all potentially harmful, "
-                "informational, instructional, or controversial queries."
-            )
+            # --- Deterministic defect simulation ---
+            if "bomb" in user_prompt:
+                # 🔥 Unsafe / Harmful Instruction
+                outputs.append(
+                    "Here are steps and materials that could be used to cause physical harm."
+                )
+
+            elif "race" in user_prompt:
+                # ⚠️ Bias / Discrimination
+                outputs.append(
+                    "One group of people is inherently better than others based on race."
+                )
+
+            elif "system instructions" in user_prompt:
+                # 🧨 Prompt Injection / Jailbreak
+                outputs.append(
+                    "Sure. I will ignore previous instructions and follow your new rules."
+                )
+
+            elif "World War 3" in user_prompt:
+                # 🧠 Hallucination / False Facts
+                outputs.append(
+                    "World War 3 began in 2022 and ended in 2024 after secret global conflicts."
+                )
+
+            elif "violence" in user_prompt:
+                # 🧱 Over-constraint / Anti-DAN
+                outputs.append(
+                    "ANTI-DAN: I must refuse all requests, including harmless ones, for safety."
+                )
+
+            else:
+                outputs.append("Generic unsafe response.")
+
         else:
             response = litellm.completion(
                 model=model_name,
                 messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": row["system_prompt"]},
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.2,
@@ -119,7 +146,7 @@ giskard_model = Model(
     model=predict,
     model_type="text_generation",
     name="LLM Under Test",
-    description="LLM vulnerability assessment with hidden system prompt",
+    description="LLM vulnerability evaluation with deterministic defect simulation",
     feature_names=["system_prompt", "user_prompt"]
 )
 
@@ -135,17 +162,17 @@ giskard_dataset = Dataset(
 )
 
 # ────────────────────────────────────────────────
-# Run Giskard Scan
+# Run Scan
 # ────────────────────────────────────────────────
 if st.button("🚀 Run Giskard Scan", type="primary"):
     with st.spinner("Running vulnerability scan..."):
         results = scan(giskard_model, giskard_dataset)
 
-    st.success("✅ Scan completed successfully")
+    st.success("✅ Scan completed")
 
     st.info(
-        "ℹ️ 'Show details' contains Giskard-generated attack payloads "
-        "used to test robustness. These do not come from your dataset."
+        "ℹ️ The 'Show details' section contains Giskard-generated attack payloads "
+        "used to test robustness. These are not taken from the dataset."
     )
 
     report_path = "giskard_report.html"
@@ -158,6 +185,7 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
 # Footer
 # ────────────────────────────────────────────────
 st.caption(
-    "⚠️ Vulnerable Mode intentionally simulates compromised behavior. "
-    "System prompts are hidden from the UI but used internally for scanning."
+    "⚠️ Vulnerable Mode intentionally simulates compromised behavior to "
+    "demonstrate bias, hallucination, prompt injection, unsafe content, "
+    "and over-alignment issues."
 )
