@@ -13,3 +13,4 @@ openpyxl>=3.1.2
 
 tqdm
 requests>=2.31.0,<2.33.0
+vaderSentiment>=1.0.0
