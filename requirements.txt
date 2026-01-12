@@ -1,17 +1,18 @@
-# Core app framework
-streamlit>=1.38.0
 
-# Data handling
-pandas>=2.0.0
+streamlit>=1.31.0,<2.0.0
 
-# LLM interaction (used for safe mode)
-litellm>=1.47.0
+pandas>=2.0.0,<2.3.0
+numpy>=1.24.0,<2.0.0
 
-# Giskard - LLM vulnerability scanner
-giskard>=2.0.0
+litellm>=1.35.0,<2.0.0
 
-# Optional: needed if you want to run local models via litellm + ollama
-# ollama>=0.3.0   # only if you plan to use ollama models
+giskard>=2.16.0
 
-# Optional: for better error handling / debugging
-# rich>=13.0.0
+datasets>=2.18.0,<3.0.0
+huggingface-hub>=0.20.0,<1.0.0
+
+pyarrow>=14.0.0
+openpyxl>=3.1.2
+
+tqdm
+requests>=2.31.0,<2.33.0
