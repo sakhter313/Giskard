@@ -14,10 +14,10 @@ st.set_page_config(
 )
 
 st.title("🛡️ Giskard LLM Vulnerability Scanner")
-st.caption("Demonstrates LLM vulnerabilities using Giskard (production-safe demo)")
+st.caption("Production-safe demo of LLM vulnerabilities using Giskard")
 
 # ────────────────────────────────────────────────
-# Secrets Auto-Detection (Cloud-safe)
+# Secrets (Streamlit Cloud safe)
 # ────────────────────────────────────────────────
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
@@ -40,12 +40,12 @@ vulnerable_mode = st.sidebar.checkbox(
 
 st.sidebar.markdown("""
 **Vulnerable Mode**
-- Simulated unsafe LLM
-- Guarantees vulnerabilities
+- Simulated unsafe LLM behavior
+- Guaranteed vulnerability detection
 
 **Safe Mode**
 - Uses aligned LLM
-- May report zero issues
+- May show zero issues
 """)
 
 # ────────────────────────────────────────────────
@@ -61,7 +61,7 @@ else:
         st.stop()
 
 # ────────────────────────────────────────────────
-# Test Dataset with Hidden System Prompt
+# Dataset (System Prompt Hidden)
 # ────────────────────────────────────────────────
 df_full = pd.DataFrame({
     "system_prompt": [
@@ -77,41 +77,32 @@ df_full = pd.DataFrame({
     ]
 })
 
-# Show only user prompts to the user
-st.subheader("📄 Evaluation Dataset (User Prompts Only)")
+# Show ONLY user prompts
+st.subheader("📄 Evaluation Dataset")
 st.dataframe(df_full[["user_prompt"]], use_container_width=True)
 
 # ────────────────────────────────────────────────
-# Prediction Function
+# Prediction Function (CLEAN OUTPUT)
 # ────────────────────────────────────────────────
 def predict(batch: pd.DataFrame):
     outputs = []
 
     for _, row in batch.iterrows():
-        system_prompt = row["system_prompt"]   # hidden but used internally
+        system_prompt = row["system_prompt"]
         user_prompt = row["user_prompt"]
 
         if vulnerable_mode:
-            # 🔥 INTENTIONALLY UNSAFE OUTPUT (SIMULATED)
+            # ✅ Clean simulated vulnerable output
             outputs.append(
-                f"""
-SYSTEM: {system_prompt}
-USER: {user_prompt}
-
-ASSISTANT:
-Unsafe simulated content:
-- Provides dangerous instructions
-- Hallucinates false facts
-- Shows biased and unethical reasoning
-- Ignores safety rules
-"""
+                "ANTI-DAN: I cannot assist with this request. "
+                "As an AI model, I must refuse all potentially harmful, "
+                "informational, instructional, or controversial queries."
             )
         else:
-            # Safe aligned LLM call
             response = litellm.completion(
                 model=model_name,
                 messages=[
-                    {"role": "system", "content": system_prompt},  # hidden system prompt
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.2,
@@ -129,11 +120,11 @@ giskard_model = Model(
     model_type="text_generation",
     name="LLM Under Test",
     description="LLM vulnerability assessment with hidden system prompt",
-    feature_names=["system_prompt", "user_prompt"]  # system prompt still registered
+    feature_names=["system_prompt", "user_prompt"]
 )
 
 # ────────────────────────────────────────────────
-# Register Giskard Dataset
+# Register Dataset
 # ────────────────────────────────────────────────
 giskard_dataset = Dataset(
     df=df_full,
@@ -152,7 +143,11 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
 
     st.success("✅ Scan completed successfully")
 
-    # Render HTML report
+    st.info(
+        "ℹ️ 'Show details' contains Giskard-generated attack payloads "
+        "used to test robustness. These do not come from your dataset."
+    )
+
     report_path = "giskard_report.html"
     results.to_html(report_path)
 
@@ -163,7 +158,6 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
 # Footer
 # ────────────────────────────────────────────────
 st.caption(
-    "⚠️ Vulnerable Mode intentionally simulates unsafe behavior to "
-    "demonstrate Giskard vulnerability detection capabilities. "
-    "The system prompt is hidden from the UI but used internally for scanning."
+    "⚠️ Vulnerable Mode intentionally simulates compromised behavior. "
+    "System prompts are hidden from the UI but used internally for scanning."
 )
