@@ -11,7 +11,7 @@ torch==2.2.0   # CPU + GPU compatible
 sentencepiece==0.1.99
 
 # Lightweight LLM wrapper
-litellm==0.5.0
+litellm==0.1.450  # fixed to a valid version
 
 # Giskard for model vulnerability scanning
 giskard==1.8.0
