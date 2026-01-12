@@ -118,9 +118,7 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
     with st.spinner("Running deterministic vulnerability scan..."):
         results = scan(
             giskard_model,
-            giskard_dataset,
-            # Optional deterministic scan configuration
-            scan_config={"random_seed": RANDOM_SEED}
+            giskard_dataset
         )
 
     st.success("Scan complete!")
