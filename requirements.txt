@@ -1,13 +1,21 @@
-streamlit>=1.31,<2.0
-pandas>=1.5,<3.0
+# Streamlit for web app
+streamlit==1.28.0
 
-# LLM abstraction
-litellm>=1.34,<2.0
+# Data handling
+pandas==2.1.0
+numpy==1.26.0
 
-# Giskard LLM testing
-giskard>=2.9,<3.0
+# HuggingFace Transformers & Inference
+transformers==4.34.0
+torch==2.2.0   # CPU + GPU compatible
+sentencepiece==0.1.99
 
-# Optional: HuggingFace support for real models
-huggingface-hub>=0.20,<1.0
-transformers>=4.36,<5.0
-torch>=2.0,<3.0
+# Lightweight LLM wrapper
+litellm==0.5.0
+
+# Giskard for model vulnerability scanning
+giskard==1.8.0
+
+# Optional utilities
+requests==2.32.4
+tqdm==4.66.1
