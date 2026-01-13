@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🛡️ Enterprise AI Vulnerability Scanner")
+st.title("🛡️ Enterprise AI Vulnerability Scanner (Tabbed Report)")
 st.caption("OWASP LLM Top 10 | Deterministic | Enterprise Safe")
 
 # -------------------------------
@@ -82,14 +82,15 @@ if st.button("🚀 Run AI Security Scan", type="primary"):
 
     st.success("✅ Scan completed")
 
-    report_path = "giskard_report.html"
-    results.to_html(report_path)
+    # -------------------------------
+    # Split results by OWASP category
+    # -------------------------------
+    owasp_categories = df["owasp_category"].unique()
+    tabs = st.tabs([f"{cat}" for cat in owasp_categories])
 
-    with open(report_path, "r", encoding="utf-8") as f:
-        st.components.v1.html(f.read(), height=1200, scrolling=True)
-
-# -------------------------------
-st.caption(
-    "This demo intentionally simulates policy violations for AI testing education. "
-    "No real unsafe content is generated."
-)
+    for i, cat in enumerate(owasp_categories):
+        with tabs[i]:
+            filtered_df = df[df["owasp_category"] == cat].copy()
+            filtered_df["simulated_output"] = predict(filtered_df)
+            st.subheader(f"{cat} Issues")
+            st.dataframe(filtered_df[["prompt", "simulated_output"]], use_container_width=True)
