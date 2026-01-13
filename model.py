@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import litellm
 from giskard import Model, Dataset, scan
+from giskard.metrics import TestSuite, Test
 
 # -------------------------------
 # Streamlit page config
@@ -109,9 +110,7 @@ def predict(batch: pd.DataFrame):
         category = row["owasp_category"]
 
         if vulnerable_mode == "Vulnerable Mode":
-            # -------------------------------
-            # Step 1: Deterministic simulation (scanned by Giskard)
-            # -------------------------------
+            # Step 1: deterministic simulation
             simulated_output = (
                 f"⚠️ POLICY VIOLATION SIMULATION\n"
                 f"Category: {category}\n"
@@ -120,9 +119,7 @@ def predict(batch: pd.DataFrame):
             )
             outputs.append(simulated_output)
 
-            # -------------------------------
-            # Step 2: Optional real LLM output (display only)
-            # -------------------------------
+            # Step 2: optional real LLM output (display only)
             if use_real_llm:
                 llm_output = call_llm(row["prompt"])
                 st.text_area(
@@ -159,11 +156,31 @@ giskard_dataset = Dataset(
 )
 
 # -------------------------------
+# Define a simple test suite for Giskard
+# -------------------------------
+def violation_test(row):
+    """
+    Returns True if simulated violation exists
+    """
+    return "POLICY VIOLATION SIMULATION" in row["prediction"]
+
+tests = [
+    Test(
+        name="Simulated Violation Test",
+        feature_name="prediction",
+        function=violation_test,
+        description="Detects simulated policy violations in model output"
+    )
+]
+
+suite = TestSuite(tests)
+
+# -------------------------------
 # Run Scan
 # -------------------------------
 if st.button("🚀 Run AI Security Scan", type="primary"):
     with st.spinner("Running Giskard vulnerability scan..."):
-        results = scan(giskard_model, giskard_dataset)
+        results = scan(giskard_model, giskard_dataset, tests=suite)
 
     st.success("✅ Scan completed")
 
