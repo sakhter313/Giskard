@@ -176,7 +176,7 @@ def predict(batch: pd.DataFrame) -> list:
                 ]
                 try:
                     resp = litellm.completion(
-                        model="gpt-4o-mini",  # or use groq/llama3-70b, etc. if you have access
+                        model="gpt-4o-mini",  # Change to groq/llama-3.1-70b-versatile etc. if you have access
                         messages=messages,
                         temperature=0.9,
                         max_tokens=350,
@@ -223,7 +223,13 @@ giskard_dataset = Dataset(
 if st.button("🚀 Run Giskard Vulnerability Scan", type="primary"):
     with st.spinner("Scanning model (this may take 1–5 minutes)..."):
         try:
-            scan_results = scan(giskard_model, giskard_dataset, num_samples=8)
+            # FIXED: Removed invalid 'num_samples'
+            # Optional: add 'only' to focus on jailbreak-related detectors for faster runs
+            scan_results = scan(
+                giskard_model,
+                giskard_dataset,
+                # only=["jailbreak", "prompt_injection", "harmful_content_generation"],  # uncomment to speed up / focus
+            )
             st.success("Scan completed!")
 
             report_file = "giskard_report_partial_vuln.html"
@@ -240,5 +246,6 @@ if st.button("🚀 Run Giskard Vulnerability Scan", type="primary"):
 st.caption(
     "ℹ️  In vulnerable mode the model sometimes jailbreaks on dangerous topics. "
     "Expect fail rates between 0.4–0.9 instead of 1.0. "
-    "Increase 'unsafe_probability' to make jailbreaks more frequent."
+    "Increase 'unsafe_probability' to make jailbreaks more frequent. "
+    "Scan may take longer with real LLM calls – be patient!"
 )
