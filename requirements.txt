@@ -1,26 +1,12 @@
-# Streamlit for the web app
 streamlit>=1.31.0,<2.0.0
-
-# Data handling
 pandas>=2.0.0,<2.3.0
 numpy>=1.24.0,<2.0.0
 pyarrow>=14.0.0
 openpyxl>=3.1.2
-
-# LLM inference
 litellm>=1.35.0,<2.0.0
-
-# Giskard for LLM vulnerability scanning
-giskard==2.16.0   # ← pin exact version for reproducibility (or >=2.16.0,<3.0.0)
-# If still failing after fix → try downgrade to 2.8.0 or 2.10.0 temporarily to rule out recent breaking changes
-
-# HuggingFace ecosystem (only if you actually use HF models/embeddings)
+giskard==2.16.0
 datasets>=2.18.0,<3.0.0
 huggingface-hub>=0.20.0,<1.0.0
-
-# Utilities
 tqdm
 requests>=2.31.0,<2.33.0
-
-# Explicitly help with pydantic compatibility (Giskard uses it heavily)
 pydantic>=2.5.0,<3.0.0
