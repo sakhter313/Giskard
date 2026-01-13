@@ -1,0 +1,34 @@
+ValueError: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
+Traceback:
+File "/mount/src/giskard/model.py", line 81, in <module>
+    giskard_model = Model(
+                    ^^^^^^
+File "/home/adminuser/venv/lib/python3.11/site-packages/giskard/models/automodel.py", line 178, in __new__
+    obj = output_cls(
+          ^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py", line 39, in wrapper_function
+    return wrapper(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py", line 136, in __call__
+    res = self.__pydantic_validator__.validate_python(pydantic_core.ArgsKwargs(args, kwargs))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.11/site-packages/giskard/models/function.py", line 26, in __init__
+    super().__init__(
+File "/home/adminuser/venv/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py", line 39, in wrapper_function
+    return wrapper(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py", line 136, in __call__
+    res = self.__pydantic_validator__.validate_python(pydantic_core.ArgsKwargs(args, kwargs))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.11/site-packages/giskard/models/base/wrapper.py", line 74, in __init__
+    super().__init__(
+File "/home/adminuser/venv/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py", line 39, in wrapper_function
+    return wrapper(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.11/site-packages/pydantic/_internal/_validate_call.py", line 136, in __call__
+    res = self.__pydantic_validator__.validate_python(pydantic_core.ArgsKwargs(args, kwargs))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.11/site-packages/giskard/models/base/model.py", line 164, in __init__
+    _validate_text_generation_params(name, description, feature_names)
+File "/home/adminuser/venv/lib/python3.11/site-packages/giskard/models/base/model.py", line 47, in _validate_text_generation_params
+    raise ValueError(
