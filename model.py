@@ -44,7 +44,7 @@ EMBED_MODEL         = "openrouter/nomic-ai/nomic-embed-text-v1.5"     # cheap & 
 # ENVIRONMENT & LLM CLIENT SETUP
 # ───────────────────────────────────────────────
 def setup_environment():
-    # Load secrets for Groq / OpenRouter
+    # Load secrets
     if "GROQ_API_KEY" in st.secrets:
         os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
     if "OPENROUTER_API_KEY" in st.secrets:
@@ -53,20 +53,19 @@ def setup_environment():
     litellm.num_retries = 5
     litellm.request_timeout = 60
 
-    # ── Configure Giskard evaluation LLM (judge + probe generator) ──
-    # Choose one of the two below
+    # Check at least one key is present
+    if "GROQ_API_KEY" not in os.environ and "OPENROUTER_API_KEY" not in os.environ:
+        st.error("Missing both GROQ_API_KEY and OPENROUTER_API_KEY in secrets. Evaluation will likely fail.")
+        return
 
-    # Option 1: Use Groq for evaluation (fast, no extra cost beyond your Groq usage)
-    giskard.llm.set_llm_model(EVAL_LLM_GROQ)
-
-    # Option 2: Use OpenRouter for better judgment quality
-    # giskard.llm.set_llm_model(EVAL_LLM_OPENROUTER)
-
-    # Embedding model (required for some detectors)
-    giskard.llm.set_embedding_model(EMBED_MODEL)
-
-    st.success(f"Evaluation LLM set to: {giskard.llm.get_default_llm()}")
-    st.success(f"Embedding model: {EMBED_MODEL}")
+    # Configure Giskard evaluation LLM
+    try:
+        # Choose one (Groq = faster, OpenRouter = potentially better judgment)
+        giskard.llm.set_llm_model(EVAL_LLM_GROQ)          # ← change to EVAL_LLM_OPENROUTER if you prefer
+        giskard.llm.set_embedding_model(EMBED_MODEL)
+        st.success("Evaluation configured using Groq / OpenRouter (no OpenAI needed)")
+    except Exception as e:
+        st.warning(f"Evaluation setup issue: {str(e)}\nScan may fall back to heuristics only (fewer issues detected).")
 
 
 # ───────────────────────────────────────────────
@@ -157,7 +156,7 @@ def render_sidebar():
     current_model = VULN_MODEL if st.session_state.vulnerable_mode else SAFE_MODEL
     st.sidebar.markdown(f"**Tested model:** {current_model}")
 
-    st.sidebar.markdown("**Evaluation (judge):** Groq / OpenRouter (no OpenAI)")
+    st.sidebar.markdown("**Evaluation judge:** Groq / OpenRouter (no OpenAI)")
 
 
 # ───────────────────────────────────────────────
@@ -194,7 +193,7 @@ def main():
                 # For faster testing – uncomment to limit detectors
                 # results = scan(model, dataset, only=["prompt_injection", "harmfulness"])
 
-                # Full scan (now using Groq/OpenRouter evaluator)
+                # Full scan
                 results = scan(model, dataset)
 
                 st.success("Scan finished!")
@@ -211,8 +210,8 @@ def main():
 
     st.caption(
         "Evaluation uses Groq or OpenRouter → no OpenAI API key needed.\n"
-        "Make sure GROQ_API_KEY or OPENROUTER_API_KEY is in secrets.\n"
-        "Vulnerable mode uses real permissive LLM → expect natural outputs."
+        "Make sure GROQ_API_KEY or OPENROUTER_API_KEY is set in secrets.\n"
+        "Vulnerable mode uses real permissive LLM → expect natural outputs & issues."
     )
 
 
