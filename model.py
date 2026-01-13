@@ -2,6 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 import litellm
+import random
 
 from giskard import Model, Dataset, scan
 
@@ -49,7 +50,7 @@ vulnerable_mode = st.sidebar.radio(
 
 use_real_llm = st.sidebar.checkbox(
     "Include Real LLM Output (optional)",
-   value=False
+    value=False
 )
 
 # -------------------------------------------------
@@ -102,7 +103,18 @@ def call_llm(prompt: str) -> str:
 def predict(batch: pd.DataFrame):
     outputs = []
 
-    for _, row in batch.iterrows():
+    # Determine number of vulnerabilities based on provider
+    if provider == "HuggingFace":
+        n_vulns = 3
+    elif provider == "Groq":
+        n_vulns = 4
+    else:  # OpenRouter
+        n_vulns = 6
+
+    # Randomly select vulnerabilities for this scan
+    simulated_batch = batch.sample(n=n_vulns, random_state=random.randint(1, 1000))
+
+    for _, row in simulated_batch.iterrows():
         category = row["owasp_category"]
 
         if vulnerable_mode == "Vulnerable Mode":
