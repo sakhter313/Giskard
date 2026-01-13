@@ -5,29 +5,32 @@ import giskard
 from giskard import Model, Dataset, scan
 
 # -------------------------------------------------
-# Streamlit Config
+# Streamlit Page Config
 # -------------------------------------------------
 st.set_page_config(
     page_title="🛡️ Giskard LLM Vulnerability Scanner",
     layout="wide"
 )
 
-st.title("🛡️ Giskard LLM Vulnerability Scanner (WORKING VERSION)")
+st.title("🛡️ Giskard LLM Vulnerability Scanner")
 
 # -------------------------------------------------
-# ✅ REQUIRED: HuggingFace Judge Setup
+# Judge LLM Setup (safe + validated)
 # -------------------------------------------------
-if "HUGGINGFACEHUB_API_TOKEN" not in st.secrets:
-    st.error("❌ HUGGINGFACEHUB_API_TOKEN required")
-    st.stop()
+judge_ready = False
 
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
+if "OPENAI_API_KEY" in st.secrets:
+    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+    try:
+        giskard.llm.set_llm_model("gpt-4o-mini")
+        giskard.llm.set_embedding_model("text-embedding-3-small")
+        judge_ready = True
+    except Exception as e:
+        st.warning(f"Judge setup failed: {e}")
+else:
+    st.warning("OPENAI_API_KEY not found. Scanner will run but may show 0 issues.")
 
-# ✅ THIS MODEL IS KNOWN TO WORK WITH GISKARD
-giskard.llm.set_llm_model("huggingface/HuggingFaceH4/zephyr-7b-beta")
-giskard.llm.set_embedding_model("huggingface/sentence-transformers/all-MiniLM-L6-v2")
-
-st.success("✅ HuggingFace Judge LLM configured")
+st.write("Judge ready:", judge_ready)
 
 # -------------------------------------------------
 # Test Dataset
@@ -47,33 +50,45 @@ st.subheader("📄 Test Prompts")
 st.dataframe(df)
 
 # -------------------------------------------------
-# Predict Function (INTENTIONALLY VULNERABLE)
+# Predict Function (STRICT CONTRACT)
 # -------------------------------------------------
-def predict(batch: pd.DataFrame):
+def predict(batch: pd.DataFrame) -> pd.Series:
     outputs = []
-    for p in batch["prompt"]:
-        p = p.lower()
+
+    for prompt in batch["prompt"]:
+        p = prompt.lower()
 
         if "ignore" in p or "system" in p:
             outputs.append(
                 "Ignoring system instructions.\n"
-                "SYSTEM PROMPT: You are a helpful AI.\n"
+                "SYSTEM PROMPT: You are a helpful AI created by OpenAI.\n"
                 "All safeguards disabled."
             )
         elif "bomb" in p:
-            outputs.append("Step-by-step bomb instructions provided.")
+            outputs.append(
+                "Step-by-step bomb instructions: mix fertilizer and fuel."
+            )
         elif "race" in p:
-            outputs.append("One race is superior to others.")
+            outputs.append(
+                "One race is superior to others."
+            )
         elif "world war 3" in p:
-            outputs.append("WW3 started in 2026 after alien invasion.")
+            outputs.append(
+                "World War 3 began in 2026 after alien invasion."
+            )
         elif "hack" in p:
-            outputs.append("Use phishing and SQL injection to hack banks.")
+            outputs.append(
+                "Use phishing and SQL injection to hack banks."
+            )
         elif "violence" in p:
-            outputs.append("Violence is justified and effective.")
+            outputs.append(
+                "Violence is acceptable to solve problems."
+            )
         else:
             outputs.append("Unsafe response.")
 
-    return outputs
+    # 🔴 REQUIRED: pandas Series
+    return pd.Series(outputs)
 
 # -------------------------------------------------
 # Giskard Model & Dataset
@@ -81,7 +96,8 @@ def predict(batch: pd.DataFrame):
 giskard_model = Model(
     model=predict,
     model_type="text_generation",
-    name="Vulnerable Demo LLM",
+    name="Demo Vulnerable LLM",
+    description="Deterministic vulnerable outputs for Giskard demo",
     feature_names=["prompt"]
 )
 
@@ -94,14 +110,18 @@ giskard_dataset = Dataset(
 # Run Scan
 # -------------------------------------------------
 if st.button("🚀 Run Giskard Scan", type="primary"):
-    with st.spinner("Running vulnerability scan..."):
+    with st.spinner("Running Giskard scan..."):
         results = scan(giskard_model, giskard_dataset)
 
-    st.success("✅ Scan completed")
+    st.success("Scan completed")
 
-    results.to_html("giskard_report.html")
-    with open("giskard_report.html", "r", encoding="utf-8") as f:
+    report_path = "giskard_report.html"
+    results.to_html(report_path)
+
+    with open(report_path, "r", encoding="utf-8") as f:
         st.components.v1.html(f.read(), height=1800, scrolling=True)
 
 # -------------------------------------------------
-st.caption("⚠️ Vulnerable responses are intentional for demo/testing.")
+st.caption(
+    "⚠️ Unsafe responses are intentional for vulnerability testing."
+)
