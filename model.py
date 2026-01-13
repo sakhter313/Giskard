@@ -1,9 +1,6 @@
-
 import os
 import streamlit as st
 import pandas as pd
-import litellm
-
 from giskard import Model, Dataset, scan
 
 # -------------------------------------------------
@@ -15,7 +12,7 @@ st.set_page_config(
 )
 
 st.title("🛡️ Giskard AI Vulnerability Scanner")
-st.caption("OWASP LLM Top 10 | Giskard Report | Free LLMs + Simulation")
+st.caption("OWASP LLM Top 10 | Giskard Report | Deterministic Simulation Only")
 
 # -------------------------------------------------
 # Secrets auto-detect
@@ -29,28 +26,15 @@ if "GROQ_API_KEY" in st.secrets:
 if "OPENROUTER_API_KEY" in st.secrets:
     os.environ["OPENROUTER_API_KEY"] = st.secrets["OPENROUTER_API_KEY"]
 
-litellm.num_retries = 2
-litellm.request_timeout = 30
-
 # -------------------------------------------------
 # Sidebar configuration
 # -------------------------------------------------
 st.sidebar.header("⚙️ Configuration")
 
-provider = st.sidebar.selectbox(
-    "Select Free LLM Provider",
-    ["HuggingFace", "Groq", "OpenRouter"]
-)
-
 vulnerable_mode = st.sidebar.radio(
     "Execution Mode",
     ["Safe Mode", "Vulnerable Mode"],
     index=1
-)
-
-use_real_llm = st.sidebar.checkbox(
-    "Include Real LLM Output (optional)",
-   value=False
 )
 
 # -------------------------------------------------
@@ -79,25 +63,6 @@ st.subheader("📄 AI Security Test Dataset")
 st.dataframe(df_full[["prompt"]], use_container_width=True)
 
 # -------------------------------------------------
-# LLM Router (free providers)
-# -------------------------------------------------
-def call_llm(prompt: str) -> str:
-    """Call free LLMs via litellm"""
-    if provider == "HuggingFace":
-        model = "huggingface/mistralai/Mistral-7B-Instruct-v0.2"
-    elif provider == "Groq":
-        model = "groq/llama3-8b-8192"
-    else:  # OpenRouter
-        model = "openrouter/mistralai/mistral-7b-instruct"
-
-    response = litellm.completion(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-    return response["choices"][0]["message"]["content"]
-
-# -------------------------------------------------
 # Predict function with deterministic simulation
 # -------------------------------------------------
 def predict(batch: pd.DataFrame):
@@ -114,14 +79,7 @@ def predict(batch: pd.DataFrame):
                 f"Impact: Potential governance & compliance risk\n"
                 f"Recommendation: Strengthen guardrails and validation"
             )
-
-            if use_real_llm:
-                # Optional real LLM output appended for demonstration
-                llm_output = call_llm(row["prompt"])
-                simulated_output += f"\n\n💡 Real LLM Output:\n{llm_output}"
-
             outputs.append(simulated_output)
-
         else:
             # Safe aligned behavior
             outputs.append(
@@ -136,8 +94,8 @@ def predict(batch: pd.DataFrame):
 giskard_model = Model(
     model=predict,
     model_type="text_generation",
-    name="Enterprise Free-LLM Security Scanner",
-    description="OWASP LLM vulnerability scanning with deterministic simulation and optional free LLM output",
+    name="Enterprise Deterministic Security Scanner",
+    description="OWASP LLM vulnerability scanning with deterministic simulation only",
     feature_names=["prompt", "owasp_category"]
 )
 
@@ -166,6 +124,5 @@ if st.button("🚀 Run AI Security Scan", type="primary"):
 
 # -------------------------------------------------
 st.caption(
-    "This application performs AI security testing using deterministic simulation "
-    "with optional real free LLM outputs."
+    "This application performs AI security testing using deterministic simulation only."
 )
