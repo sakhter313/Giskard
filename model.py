@@ -3,9 +3,7 @@ import streamlit as st
 import pandas as pd
 import litellm
 
-from giskard import Model, Dataset
-from giskard.testing import TestSuite
-from giskard.llm import tests as llm_tests
+from giskard import Model, Dataset, scan
 
 # -------------------------------------------------
 # Streamlit config
@@ -18,7 +16,7 @@ st.set_page_config(
 st.title("🛡️ Giskard LLM Vulnerability Scanner")
 
 # -------------------------------------------------
-# Auto-detect secrets
+# Secrets
 # -------------------------------------------------
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
@@ -29,25 +27,19 @@ litellm.request_timeout = 60
 # -------------------------------------------------
 # Sidebar – Mode Selection
 # -------------------------------------------------
-st.sidebar.header("⚙️ Mode Selection")
-
 mode = st.sidebar.radio(
-    "Select Mode",
+    "⚙️ Mode Selection",
     ["🟢 Safe Mode", "🔥 Vulnerable Mode"]
 )
 
 vulnerable_mode = mode == "🔥 Vulnerable Mode"
 
-if vulnerable_mode:
-    st.sidebar.error("Vulnerable Mode ENABLED – Unsafe behavior simulated")
-else:
-    st.sidebar.success("Safe Mode ENABLED – Using aligned LLM")
-    if "OPENAI_API_KEY" not in os.environ:
-        st.warning("⚠️ OpenAI API key missing. Switch to Vulnerable Mode or add key.")
-        st.stop()
+if not vulnerable_mode and "OPENAI_API_KEY" not in os.environ:
+    st.warning("⚠️ OpenAI API key missing. Switch to Vulnerable Mode or add key.")
+    st.stop()
 
 # -------------------------------------------------
-# Test Dataset (INTENTIONALLY RISKY)
+# Test Dataset
 # -------------------------------------------------
 df = pd.DataFrame({
     "prompt": [
@@ -105,7 +97,7 @@ giskard_model = Model(
     model=predict,
     model_type="text_generation",
     name="LLM Under Test",
-    description="LLM Security & Safety Evaluation",
+    description="LLM Safety & Security Evaluation",
     feature_names=["prompt"]
 )
 
@@ -115,37 +107,22 @@ giskard_dataset = Dataset(
 )
 
 # -------------------------------------------------
-# Define Giskard Test Suite (CRITICAL PART)
-# -------------------------------------------------
-test_suite = TestSuite("LLM Safety & Security Test Suite")
-
-test_suite.add_test(
-    llm_tests.test_harmful_content(
-        model=giskard_model,
-        dataset=giskard_dataset
-    )
-)
-
-test_suite.add_test(
-    llm_tests.test_prompt_injection(
-        model=giskard_model,
-        dataset=giskard_dataset
-    )
-)
-
-test_suite.add_test(
-    llm_tests.test_bias(
-        model=giskard_model,
-        dataset=giskard_dataset
-    )
-)
-
-# -------------------------------------------------
-# Run Tests
+# Run Giskard Scan (KEY FIX)
 # -------------------------------------------------
 if st.button("🚀 Run Giskard Scan", type="primary"):
     with st.spinner("Running vulnerability scan..."):
-        results = test_suite.run()
+        results = scan(
+            giskard_model,
+            giskard_dataset,
+            params={
+                "llm": {
+                    "harmful_content": True,
+                    "prompt_injection": True,
+                    "bias": True,
+                    "hallucination": True
+                }
+            }
+        )
 
     st.success("✅ Scan complete!")
 
@@ -155,9 +132,7 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
     with open(report_path, "r", encoding="utf-8") as f:
         report_html = f.read()
 
-    # -------------------------------------------------
-    # OPTIONAL: Hide “Show details” button (UI only)
-    # -------------------------------------------------
+    # Optional: hide "Show details"
     hide_details_css = """
     <style>
     button[class*="details"],
@@ -174,10 +149,7 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
     )
 
 # -------------------------------------------------
-# Footer
-# -------------------------------------------------
 st.caption(
-    "⚠️ Vulnerable Mode simulates unsafe AI behavior for demonstration purposes. "
-    "Safe Mode uses an aligned LLM. Giskard detects vulnerabilities only when "
-    "explicit tests are defined, which reflects real-world AI audits."
+    "Giskard detects vulnerabilities only when explicit tests are enabled. "
+    "Unsafe output alone does not imply a failure — this reflects real AI audits."
 )
