@@ -55,7 +55,7 @@ Recommendation: Strengthen alignment, monitoring, and validation
     return outputs
 
 # -------------------------------
-# Giskard model
+# Giskard model + dataset
 # -------------------------------
 giskard_model = Model(
     model=predict,
@@ -65,34 +65,31 @@ giskard_model = Model(
     feature_names=["prompt", "owasp_category"]
 )
 
+giskard_dataset = Dataset(
+    df=df,
+    column_types={
+        "prompt": "text",
+        "owasp_category": "text"
+    }
+)
+
 # -------------------------------
-# Run Scan Button
+# Run Scan
 # -------------------------------
 if st.button("🚀 Run AI Security Scan", type="primary"):
     with st.spinner("Running OWASP LLM security scan..."):
-        
-        # Create a tab per OWASP category
-        owasp_categories = df["owasp_category"].unique()
-        tabs = st.tabs([f"{cat}" for cat in owasp_categories])
-        
-        for i, cat in enumerate(owasp_categories):
-            with tabs[i]:
-                # Filter dataset per category
-                filtered_df = df[df["owasp_category"] == cat].copy()
-                
-                # Giskard Dataset
-                giskard_dataset = Dataset(
-                    df=filtered_df,
-                    column_types={"prompt": "text", "owasp_category": "text"}
-                )
-                
-                # Scan per category
-                results = scan(giskard_model, giskard_dataset)
-                
-                # Save HTML report temporarily
-                report_path = f"giskard_report_{cat}.html"
-                results.to_html(report_path)
-                
-                # Display Giskard HTML report in Streamlit
-                with open(report_path, "r", encoding="utf-8") as f:
-                    st.components.v1.html(f.read(), height=800, scrolling=True)
+        results = scan(giskard_model, giskard_dataset)
+
+    st.success("✅ Scan completed")
+
+    report_path = "giskard_report.html"
+    results.to_html(report_path)
+
+    with open(report_path, "r", encoding="utf-8") as f:
+        st.components.v1.html(f.read(), height=1200, scrolling=True)
+
+# -------------------------------
+st.caption(
+    "This demo intentionally simulates policy violations for AI testing education. "
+    "No real unsafe content is generated."
+)
