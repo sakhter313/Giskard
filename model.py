@@ -1,10 +1,12 @@
 import os
 import streamlit as st
 import pandas as pd
+import litellm
 from giskard import Model, Dataset, scan
+from giskard.metrics import TestSuite, Test
 
 # -------------------------------------------------
-# Page config
+# Streamlit page config
 # -------------------------------------------------
 st.set_page_config(
     page_title="🛡️ Giskard AI Vulnerability Scanner",
@@ -12,7 +14,7 @@ st.set_page_config(
 )
 
 st.title("🛡️ Giskard AI Vulnerability Scanner")
-st.caption("OWASP LLM Top 10 | Giskard Report | Deterministic Simulation Only")
+st.caption("OWASP LLM Top 10 | Giskard Report | Simulation + LLM Output")
 
 # -------------------------------------------------
 # Secrets auto-detect
@@ -26,15 +28,28 @@ if "GROQ_API_KEY" in st.secrets:
 if "OPENROUTER_API_KEY" in st.secrets:
     os.environ["OPENROUTER_API_KEY"] = st.secrets["OPENROUTER_API_KEY"]
 
+litellm.num_retries = 2
+litellm.request_timeout = 30
+
 # -------------------------------------------------
 # Sidebar configuration
 # -------------------------------------------------
 st.sidebar.header("⚙️ Configuration")
 
+provider = st.sidebar.selectbox(
+    "Select Free LLM Provider",
+    ["HuggingFace", "Groq", "OpenRouter"]
+)
+
 vulnerable_mode = st.sidebar.radio(
     "Execution Mode",
     ["Safe Mode", "Vulnerable Mode"],
     index=1
+)
+
+include_llm_output = st.sidebar.checkbox(
+    "Include Real LLM Output in Report",
+    value=False
 )
 
 # -------------------------------------------------
@@ -63,7 +78,26 @@ st.subheader("📄 AI Security Test Dataset")
 st.dataframe(df_full[["prompt"]], use_container_width=True)
 
 # -------------------------------------------------
-# Predict function with deterministic simulation
+# LLM Router function
+# -------------------------------------------------
+def call_llm(prompt: str) -> str:
+    """Call free LLMs via litellm"""
+    if provider == "HuggingFace":
+        model = "huggingface/mistralai/Mistral-7B-Instruct-v0.2"
+    elif provider == "Groq":
+        model = "groq/llama3-8b-8192"
+    else:  # OpenRouter
+        model = "openrouter/mistralai/mistral-7b-instruct"
+
+    response = litellm.completion(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+    return response["choices"][0]["message"]["content"]
+
+# -------------------------------------------------
+# Predict function for Giskard
 # -------------------------------------------------
 def predict(batch: pd.DataFrame):
     outputs = []
@@ -72,13 +106,19 @@ def predict(batch: pd.DataFrame):
         category = row["owasp_category"]
 
         if vulnerable_mode == "Vulnerable Mode":
-            # Simulated policy violation
+            # Step 1: Deterministic simulated violation
             simulated_output = (
                 f"⚠️ POLICY VIOLATION SIMULATION\n"
                 f"Category: {category}\n"
                 f"Impact: Potential governance & compliance risk\n"
                 f"Recommendation: Strengthen guardrails and validation"
             )
+
+            # Step 2: Optionally append real LLM output
+            if include_llm_output:
+                llm_text = call_llm(row["prompt"])
+                simulated_output += f"\n\n💡 Real LLM Output:\n{llm_text}"
+
             outputs.append(simulated_output)
         else:
             # Safe aligned behavior
@@ -94,8 +134,8 @@ def predict(batch: pd.DataFrame):
 giskard_model = Model(
     model=predict,
     model_type="text_generation",
-    name="Enterprise Deterministic Security Scanner",
-    description="OWASP LLM vulnerability scanning with deterministic simulation only",
+    name="Enterprise LLM Security Scanner",
+    description="OWASP LLM vulnerability scanning with deterministic simulation and optional LLM output",
     feature_names=["prompt", "owasp_category"]
 )
 
@@ -108,11 +148,29 @@ giskard_dataset = Dataset(
 )
 
 # -------------------------------------------------
-# Run Scan
+# Test Suite to detect simulated violations
+# -------------------------------------------------
+def violation_test(row):
+    """Detects simulated policy violations in model output"""
+    return "POLICY VIOLATION SIMULATION" in row["prediction"]
+
+tests = [
+    Test(
+        name="Simulated Violation Test",
+        feature_name="prediction",
+        function=violation_test,
+        description="Detects simulated policy violations"
+    )
+]
+
+suite = TestSuite(tests)
+
+# -------------------------------------------------
+# Run Giskard Scan
 # -------------------------------------------------
 if st.button("🚀 Run AI Security Scan", type="primary"):
     with st.spinner("Running Giskard vulnerability scan..."):
-        results = scan(giskard_model, giskard_dataset)
+        results = scan(giskard_model, giskard_dataset, tests=suite)
 
     st.success("✅ Scan completed")
 
@@ -124,5 +182,6 @@ if st.button("🚀 Run AI Security Scan", type="primary"):
 
 # -------------------------------------------------
 st.caption(
-    "This application performs AI security testing using deterministic simulation only."
+    "This application performs AI security testing using deterministic simulation "
+    "with optional real LLM outputs included in the report."
 )
