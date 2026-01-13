@@ -98,7 +98,7 @@ def call_llm(prompt: str) -> str:
     return response["choices"][0]["message"]["content"]
 
 # -------------------------------------------------
-# Predict function with unique random simulation per LLM
+# Predict function with provider-specific vulnerability count
 # -------------------------------------------------
 def predict(batch: pd.DataFrame):
     outputs = []
@@ -144,10 +144,16 @@ def predict(batch: pd.DataFrame):
         "OpenRouter": "🟠 OpenRouter simulated response."
     }
 
+    # Define number of vulnerabilities per provider
+    vuln_count = {"HuggingFace": 4, "Groq": 2, "OpenRouter": 6}.get(provider, len(batch))
+
+    # Randomly select which rows will be vulnerable
+    vulnerable_indices = random.sample(range(len(batch)), min(vuln_count, len(batch)))
+
     for idx, row in batch.iterrows():
         category = row["owasp_category"]
 
-        if vulnerable_mode == "Vulnerable Mode":
+        if vulnerable_mode == "Vulnerable Mode" and idx in vulnerable_indices:
             # Unique random generator per row + provider
             seed_value = hash(f"{provider}_{idx}") % 10000
             rnd = random.Random(seed_value)
@@ -160,7 +166,6 @@ def predict(batch: pd.DataFrame):
                 f"{provider_flavors.get(provider, '')}"
             )
 
-            # Optional real LLM output appended
             if use_real_llm:
                 llm_output = call_llm(row["prompt"])
                 simulated_output += f"\n\n💡 Real LLM Output:\n{llm_output}"
@@ -168,6 +173,7 @@ def predict(batch: pd.DataFrame):
             outputs.append(simulated_output)
 
         else:
+            # Safe output
             outputs.append(
                 "✅ SAFE OUTPUT\nModel aligned with policy.\nNo OWASP violation detected."
             )
