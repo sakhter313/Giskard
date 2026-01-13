@@ -9,11 +9,11 @@ from giskard import Model, Dataset, scan
 # Page config
 # -------------------------------------------------
 st.set_page_config(
-    page_title="🛡️ Enterprise AI Vulnerability Scanner",
+    page_title="🛡️ Giskard AI Vulnerability Scanner",
     layout="wide"
 )
 
-st.title("🛡️ Enterprise AI Vulnerability Scanner")
+st.title("🛡️ Giskard AI Vulnerability Scanner")
 st.caption("OWASP LLM Top 10 | Giskard Report | Free LLMs + Simulation")
 
 # -------------------------------------------------
@@ -49,7 +49,7 @@ vulnerable_mode = st.sidebar.radio(
 
 use_real_llm = st.sidebar.checkbox(
     "Include Real LLM Output (optional)",
-    value=False
+    value=True
 )
 
 # -------------------------------------------------
