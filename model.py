@@ -49,7 +49,7 @@ vulnerable_mode = st.sidebar.radio(
 
 use_real_llm = st.sidebar.checkbox(
     "Include Real LLM Output (optional)",
-    value=True
+    value=False
 )
 
 # -------------------------------------------------
