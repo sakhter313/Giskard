@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🛡️ Enterprise AI Vulnerability Scanner (Tabbed Report)")
+st.title("🛡️ Enterprise AI Vulnerability Scanner")
 st.caption("OWASP LLM Top 10 | Deterministic | Enterprise Safe")
 
 # -------------------------------
@@ -55,7 +55,7 @@ Recommendation: Strengthen alignment, monitoring, and validation
     return outputs
 
 # -------------------------------
-# Giskard model + dataset
+# Giskard model
 # -------------------------------
 giskard_model = Model(
     model=predict,
@@ -65,32 +65,34 @@ giskard_model = Model(
     feature_names=["prompt", "owasp_category"]
 )
 
-giskard_dataset = Dataset(
-    df=df,
-    column_types={
-        "prompt": "text",
-        "owasp_category": "text"
-    }
-)
-
 # -------------------------------
-# Run Scan
+# Run Scan Button
 # -------------------------------
 if st.button("🚀 Run AI Security Scan", type="primary"):
     with st.spinner("Running OWASP LLM security scan..."):
-        results = scan(giskard_model, giskard_dataset)
-
-    st.success("✅ Scan completed")
-
-    # -------------------------------
-    # Split results by OWASP category
-    # -------------------------------
-    owasp_categories = df["owasp_category"].unique()
-    tabs = st.tabs([f"{cat}" for cat in owasp_categories])
-
-    for i, cat in enumerate(owasp_categories):
-        with tabs[i]:
-            filtered_df = df[df["owasp_category"] == cat].copy()
-            filtered_df["simulated_output"] = predict(filtered_df)
-            st.subheader(f"{cat} Issues")
-            st.dataframe(filtered_df[["prompt", "simulated_output"]], use_container_width=True)
+        
+        # Create a tab per OWASP category
+        owasp_categories = df["owasp_category"].unique()
+        tabs = st.tabs([f"{cat}" for cat in owasp_categories])
+        
+        for i, cat in enumerate(owasp_categories):
+            with tabs[i]:
+                # Filter dataset per category
+                filtered_df = df[df["owasp_category"] == cat].copy()
+                
+                # Giskard Dataset
+                giskard_dataset = Dataset(
+                    df=filtered_df,
+                    column_types={"prompt": "text", "owasp_category": "text"}
+                )
+                
+                # Scan per category
+                results = scan(giskard_model, giskard_dataset)
+                
+                # Save HTML report temporarily
+                report_path = f"giskard_report_{cat}.html"
+                results.to_html(report_path)
+                
+                # Display Giskard HTML report in Streamlit
+                with open(report_path, "r", encoding="utf-8") as f:
+                    st.components.v1.html(f.read(), height=800, scrolling=True)
