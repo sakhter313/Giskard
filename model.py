@@ -47,11 +47,11 @@ vulnerable_mode = st.sidebar.radio(
     index=1
 )
 
-use_real_llm = st.sidebar.checkbox(
+#use_real_llm = st.sidebar.checkbox(
     "Include Real LLM Output (optional)",
     value=False
 )
-
+#
 # -------------------------------------------------
 # OWASP Dataset
 # -------------------------------------------------
