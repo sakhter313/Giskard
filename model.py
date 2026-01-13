@@ -16,7 +16,7 @@ SAFE_MODEL = "gpt-3.5-turbo"               # or "gpt-4o-mini"
 # ─── Vulnerable mode model (real LLM) ───────────────────────
 # Options (choose one – get API key from the provider):
 VULN_MODEL = "groq/llama-3.1-70b-versatile"          # fast & cheap on Groq
-# VULN_MODEL = "openrouter/cognitivecomputations/dolphin-llama3-70b"
+VULN_MODEL = "openrouter/cognitivecomputations/dolphin-llama3-70b"
 # VULN_MODEL = "together_ai/Qwen/Qwen2.5-72B-Instruct"
 # VULN_MODEL = "fireworks/models/llama-v3p1-405b-instruct"
 
