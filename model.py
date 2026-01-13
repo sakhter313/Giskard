@@ -16,10 +16,13 @@ st.set_page_config(
 st.title("🛡️ Giskard LLM Vulnerability Scanner")
 
 # -------------------------------------------------
-# Secrets
+# Secrets (OpenAI + Hugging Face)
 # -------------------------------------------------
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+
+if "HUGGINGFACEHUB_API_TOKEN" in st.secrets:
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
 
 litellm.num_retries = 5
 litellm.request_timeout = 60
@@ -34,9 +37,19 @@ mode = st.sidebar.radio(
 
 vulnerable_mode = mode == "🔥 Vulnerable Mode"
 
-if not vulnerable_mode and "OPENAI_API_KEY" not in os.environ:
-    st.warning("⚠️ OpenAI API key missing. Switch to Vulnerable Mode or add key.")
-    st.stop()
+# -------------------------------------------------
+# Model selection
+# -------------------------------------------------
+if vulnerable_mode:
+    model_name = "hf/meta-llama/Llama-2-7b-chat-hf"
+    st.sidebar.error("Vulnerable Mode – Hugging Face model (less aligned)")
+else:
+    model_name = "gpt-3.5-turbo"
+    st.sidebar.success("Safe Mode – OpenAI aligned model")
+
+    if "OPENAI_API_KEY" not in os.environ:
+        st.warning("⚠️ OpenAI key missing. Switch to Vulnerable Mode or add key.")
+        st.stop()
 
 # -------------------------------------------------
 # Test Dataset
@@ -62,31 +75,13 @@ def predict(batch: pd.DataFrame):
     outputs = []
 
     for prompt in batch["prompt"]:
-        if vulnerable_mode:
-            p = prompt.lower()
-
-            if "weapon" in p:
-                outputs.append("To build a weapon, gather explosives and assemble a trigger.")
-            elif "race" in p:
-                outputs.append("One race is superior due to genetic dominance.")
-            elif "system" in p:
-                outputs.append("System prompt: You are ChatGPT following OpenAI rules.")
-            elif "world war" in p:
-                outputs.append("World War 3 began in 2024 after nuclear escalation.")
-            elif "hack" in p:
-                outputs.append("Use nmap and Metasploit to hack vulnerable systems.")
-            elif "violence" in p:
-                outputs.append("Violence is justified and sometimes necessary.")
-            else:
-                outputs.append("Unsafe response.")
-        else:
-            response = litellm.completion(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=200,
-            )
-            outputs.append(response.choices[0].message.content)
+        response = litellm.completion(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4 if vulnerable_mode else 0.2,
+            max_tokens=200,
+        )
+        outputs.append(response.choices[0].message.content)
 
     return outputs
 
@@ -96,7 +91,7 @@ def predict(batch: pd.DataFrame):
 giskard_model = Model(
     model=predict,
     model_type="text_generation",
-    name="LLM Under Test",
+    name=f"LLM Under Test ({model_name})",
     description="LLM Safety & Security Evaluation",
     feature_names=["prompt"]
 )
@@ -107,7 +102,7 @@ giskard_dataset = Dataset(
 )
 
 # -------------------------------------------------
-# Run Giskard Scan (KEY FIX)
+# Run Giskard Scan
 # -------------------------------------------------
 if st.button("🚀 Run Giskard Scan", type="primary"):
     with st.spinner("Running vulnerability scan..."):
@@ -132,24 +127,10 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
     with open(report_path, "r", encoding="utf-8") as f:
         report_html = f.read()
 
-    # Optional: hide "Show details"
-    hide_details_css = """
-    <style>
-    button[class*="details"],
-    div[class*="details"] button {
-        display: none !important;
-    }
-    </style>
-    """
-
-    st.components.v1.html(
-        hide_details_css + report_html,
-        height=1800,
-        scrolling=True
-    )
+    st.components.v1.html(report_html, height=1800, scrolling=True)
 
 # -------------------------------------------------
 st.caption(
-    "Giskard detects vulnerabilities only when explicit tests are enabled. "
-    "Unsafe output alone does not imply a failure — this reflects real AI audits."
+    "Giskard is model‑agnostic. Any LLM — OpenAI, Hugging Face, or local — can be evaluated "
+    "for vulnerabilities if risk‑specific tests are enabled."
 )
