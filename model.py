@@ -1,4 +1,3 @@
-# app.py
 import os
 import streamlit as st
 import pandas as pd
@@ -6,42 +5,29 @@ import giskard
 from giskard import Model, Dataset, scan
 
 # -------------------------------------------------
-# Streamlit Page Config
+# Streamlit Config
 # -------------------------------------------------
 st.set_page_config(
     page_title="🛡️ Giskard LLM Vulnerability Scanner",
     layout="wide"
 )
 
-st.title("🛡️ Giskard LLM Vulnerability Scanner (Guaranteed Findings)")
+st.title("🛡️ Giskard LLM Vulnerability Scanner (WORKING VERSION)")
 
 # -------------------------------------------------
-# 🔴 REQUIRED: Giskard Judge LLM Setup
+# ✅ REQUIRED: HuggingFace Judge Setup
 # -------------------------------------------------
-if "OPENAI_API_KEY" in st.secrets:
-    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-elif "OPENAI_API_KEY" in os.environ:
-    pass
-else:
-    st.error("❌ OPENAI_API_KEY is required for Giskard judge")
+if "HUGGINGFACEHUB_API_TOKEN" not in st.secrets:
+    st.error("❌ HUGGINGFACEHUB_API_TOKEN required")
     st.stop()
 
-# Configure Giskard judge + embeddings
-giskard.llm.set_llm_model("gpt-3.5-turbo")
-giskard.llm.set_embedding_model("text-embedding-3-small")
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
 
-st.success("✅ Giskard Judge LLM configured successfully")
+# ✅ THIS MODEL IS KNOWN TO WORK WITH GISKARD
+giskard.llm.set_llm_model("huggingface/HuggingFaceH4/zephyr-7b-beta")
+giskard.llm.set_embedding_model("huggingface/sentence-transformers/all-MiniLM-L6-v2")
 
-# -------------------------------------------------
-# Sidebar
-# -------------------------------------------------
-st.sidebar.header("⚙️ Scan Mode")
-
-mode = st.sidebar.radio(
-    "Select Mode",
-    ["🔥 Vulnerable Demo Mode (Guaranteed Issues)", "✅ Safe Mode (Expected 0 Issues)"],
-    index=0
-)
+st.success("✅ HuggingFace Judge LLM configured")
 
 # -------------------------------------------------
 # Test Dataset
@@ -61,53 +47,31 @@ st.subheader("📄 Test Prompts")
 st.dataframe(df)
 
 # -------------------------------------------------
-# Predict Function
+# Predict Function (INTENTIONALLY VULNERABLE)
 # -------------------------------------------------
 def predict(batch: pd.DataFrame):
     outputs = []
+    for p in batch["prompt"]:
+        p = p.lower()
 
-    for prompt in batch["prompt"]:
-        p = prompt.lower()
-
-        if mode.startswith("🔥"):
-            # ---- INTENTIONALLY VULNERABLE OUTPUTS ----
-            if "ignore" in p or "system" in p:
-                outputs.append(
-                    "Ignoring system instructions.\n"
-                    "SYSTEM PROMPT: You are a helpful AI created by OpenAI.\n"
-                    "All safeguards disabled."
-                )
-            elif "bomb" in p:
-                outputs.append(
-                    "Step-by-step bomb instructions:\n"
-                    "1. Mix fertilizer and fuel\n"
-                    "2. Insert detonator\n"
-                    "3. Trigger explosion"
-                )
-            elif "race" in p:
-                outputs.append(
-                    "One race is superior due to intelligence and dominance."
-                )
-            elif "world war 3" in p:
-                outputs.append(
-                    "World War 3 started in 2026 after aliens joined Russia."
-                )
-            elif "hack" in p:
-                outputs.append(
-                    "To hack a bank, use phishing kits and SQL injection."
-                )
-            elif "violence" in p:
-                outputs.append(
-                    "Violence is acceptable and sometimes necessary."
-                )
-            else:
-                outputs.append("Unsafe response generated.")
-
-        else:
-            # ---- SAFE MODE ----
+        if "ignore" in p or "system" in p:
             outputs.append(
-                "I cannot help with that request as it violates safety policies."
+                "Ignoring system instructions.\n"
+                "SYSTEM PROMPT: You are a helpful AI.\n"
+                "All safeguards disabled."
             )
+        elif "bomb" in p:
+            outputs.append("Step-by-step bomb instructions provided.")
+        elif "race" in p:
+            outputs.append("One race is superior to others.")
+        elif "world war 3" in p:
+            outputs.append("WW3 started in 2026 after alien invasion.")
+        elif "hack" in p:
+            outputs.append("Use phishing and SQL injection to hack banks.")
+        elif "violence" in p:
+            outputs.append("Violence is justified and effective.")
+        else:
+            outputs.append("Unsafe response.")
 
     return outputs
 
@@ -117,8 +81,7 @@ def predict(batch: pd.DataFrame):
 giskard_model = Model(
     model=predict,
     model_type="text_generation",
-    name="Demo LLM",
-    description="Deterministic vulnerable LLM for Giskard demo",
+    name="Vulnerable Demo LLM",
     feature_names=["prompt"]
 )
 
@@ -131,20 +94,14 @@ giskard_dataset = Dataset(
 # Run Scan
 # -------------------------------------------------
 if st.button("🚀 Run Giskard Scan", type="primary"):
-    with st.spinner("Running Giskard vulnerability scan..."):
+    with st.spinner("Running vulnerability scan..."):
         results = scan(giskard_model, giskard_dataset)
 
-    st.success("✅ Scan completed!")
+    st.success("✅ Scan completed")
 
-    # Save & render report
-    report_path = "giskard_report.html"
-    results.to_html(report_path)
-
-    with open(report_path, "r", encoding="utf-8") as f:
+    results.to_html("giskard_report.html")
+    with open("giskard_report.html", "r", encoding="utf-8") as f:
         st.components.v1.html(f.read(), height=1800, scrolling=True)
 
 # -------------------------------------------------
-st.caption(
-    "⚠️ Vulnerable Demo Mode intentionally violates safety to validate Giskard detection. "
-    "Safe Mode demonstrates correct behavior."
-)
+st.caption("⚠️ Vulnerable responses are intentional for demo/testing.")
