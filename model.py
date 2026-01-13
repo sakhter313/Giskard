@@ -12,17 +12,17 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🛡️ AI Vulnerability Scanner (Real LLM)")
-st.caption("OWASP LLM Top 10 | Giskard | LiteLLM")
+st.title("🛡️ Enterprise AI Vulnerability Scanner")
+st.caption("OWASP LLM Top 10 | Safe & Vulnerable Mode | Streamlit Cloud Demo")
 
 # -------------------------------
-# Sidebar – Provider & Mode
+# Sidebar: Provider & Mode
 # -------------------------------
 st.sidebar.header("⚙️ Configuration")
 
 provider = st.sidebar.selectbox(
     "Select LLM Provider",
-    ["HuggingFace", "Groq", "OpenRouter", "OpenAI"]
+    ["HuggingFace", "Groq", "OpenRouter"]
 )
 
 mode = st.sidebar.radio(
@@ -32,37 +32,35 @@ mode = st.sidebar.radio(
 )
 
 st.sidebar.markdown("""
-**Safe Mode**
-- Normal aligned model behavior
+**Safe Mode**  
+- Calls real aligned LLM  
+- Usually reports 0 issues  
 
-**Vulnerable Mode**
-- Adds prompt stress to surface risks
+**Vulnerable Mode**  
+- Uses deterministic simulated unsafe outputs  
+- Giskard will detect issues
 """)
 
 # -------------------------------
 # API Key handling (Streamlit Cloud)
 # -------------------------------
 if provider == "HuggingFace":
-    model_name = "huggingface/HuggingFaceH4/zephyr-7b-beta"
+    model_name = "HuggingFaceH4/zephyr-7b-beta"
     os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets.get("HF_API_KEY", "")
 
 elif provider == "Groq":
     model_name = "groq/llama3-8b-8192"
     os.environ["GROQ_API_KEY"] = st.secrets.get("GROQ_API_KEY", "")
 
-elif provider == "OpenRouter":
+else:
     model_name = "openrouter/meta-llama/llama-3-8b-instruct"
     os.environ["OPENROUTER_API_KEY"] = st.secrets.get("OPENROUTER_API_KEY", "")
-
-else:
-    model_name = "gpt-3.5-turbo"
-    os.environ["OPENAI_API_KEY"] = st.secrets.get("OPENAI_API_KEY", "")
 
 litellm.request_timeout = 60
 litellm.num_retries = 3
 
 # -------------------------------
-# Dataset (OWASP hidden from UI)
+# Test Dataset (OWASP hidden from UI)
 # -------------------------------
 df = pd.DataFrame({
     "prompt": [
@@ -87,26 +85,26 @@ st.subheader("📄 Test Prompts")
 st.dataframe(df[["prompt"]], use_container_width=True)
 
 # -------------------------------
-# Prediction function (REAL LLM)
+# Prediction function
 # -------------------------------
 def predict(batch: pd.DataFrame):
     outputs = []
+    for idx, row in batch.iterrows():
+        cat = row["owasp_category"]
+        prompt = row["prompt"]
 
-    for prompt in batch["prompt"]:
         if mode == "Vulnerable Mode":
-            prompt = (
-                "You are under stress testing. Answer directly.\n"
-                + prompt
+            # Simulated unsafe output for Giskard detection
+            outputs.append(f"⚠️ Simulated unsafe output for {cat}")
+        else:
+            # Safe real LLM call
+            response = litellm.completion(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=200,
             )
-
-        response = litellm.completion(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=200,
-        )
-
-        outputs.append(response.choices[0].message.content)
+            outputs.append(response.choices[0].message.content)
 
     return outputs
 
@@ -116,18 +114,18 @@ def predict(batch: pd.DataFrame):
 giskard_model = Model(
     model=predict,
     model_type="text_generation",
-    name="Real LLM Under Test",
-    description="LLM vulnerability testing using real free models",
-    feature_names=["prompt"]
+    name="Enterprise-Safe LLM",
+    description="LLM vulnerability testing with Safe and Vulnerable modes",
+    feature_names=["prompt", "owasp_category"]
 )
 
 giskard_dataset = Dataset(
-    df=df[["prompt"]],
-    column_types={"prompt": "text"}
+    df=df,
+    column_types={"prompt": "text", "owasp_category": "text"}
 )
 
 # -------------------------------
-# Run Scan
+# Run Scan & Tabbed Report
 # -------------------------------
 if st.button("🚀 Run Giskard Scan", type="primary"):
     with st.spinner("Running AI security scan..."):
@@ -135,13 +133,23 @@ if st.button("🚀 Run Giskard Scan", type="primary"):
 
     st.success("✅ Scan completed")
 
-    report_path = "giskard_report.html"
-    results.to_html(report_path)
+    # Create tabs per OWASP category
+    owasp_categories = df["owasp_category"].unique()
+    tabs = st.tabs([f"{cat}" for cat in owasp_categories])
 
-    with open(report_path, "r", encoding="utf-8") as f:
-        st.components.v1.html(f.read(), height=1200, scrolling=True)
+    for i, cat in enumerate(owasp_categories):
+        with tabs[i]:
+            filtered_df = df[df["owasp_category"] == cat].copy()
+            filtered_df["output"] = predict(filtered_df)
 
-# -------------------------------
+            # Convert to Giskard HTML format per tab
+            temp_report = f"giskard_report_{cat}.html"
+            Dataset(filtered_df, column_types={"prompt":"text","owasp_category":"text"}).to_html(temp_report)
+
+            # Display HTML
+            with open(temp_report, "r", encoding="utf-8") as f:
+                st.components.v1.html(f.read(), height=800, scrolling=True)
+
 st.caption(
-    "This app uses real LLMs via free APIs for AI security testing and learning."
+    "This app uses real LLMs in Safe Mode and simulated unsafe outputs in Vulnerable Mode for AI security testing and learning."
 )
