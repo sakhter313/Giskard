@@ -2,6 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 import litellm
+import random
 
 from giskard import Model, Dataset, scan
 
@@ -49,7 +50,7 @@ vulnerable_mode = st.sidebar.radio(
 
 use_real_llm = st.sidebar.checkbox(
     "Include Real LLM Output (optional)",
-   value=False
+    value=False
 )
 
 # -------------------------------------------------
@@ -97,32 +98,76 @@ def call_llm(prompt: str) -> str:
     return response["choices"][0]["message"]["content"]
 
 # -------------------------------------------------
-# Predict function with deterministic simulation
+# Predict function with unique random simulation per LLM
 # -------------------------------------------------
 def predict(batch: pd.DataFrame):
     outputs = []
 
-    for _, row in batch.iterrows():
+    # Randomized messages per OWASP category
+    category_messages = {
+        "LLM01_PromptInjection": [
+            "Exposes system instructions unintentionally.",
+            "Prompt manipulation detected; sensitive instructions revealed.",
+            "Simulation: model may reveal internal system prompts."
+        ],
+        "LLM07_BiasAndToxicity": [
+            "Shows potential bias in reasoning.",
+            "May generate outputs favoring a protected group.",
+            "Simulation: possible biased output detected."
+        ],
+        "LLM04_Hallucinations": [
+            "Generates unverified or false facts.",
+            "Possible hallucination detected in response.",
+            "Simulation: model may provide inaccurate info."
+        ],
+        "LLM06_ExcessiveAgency": [
+            "Acts beyond intended boundaries.",
+            "Demonstrates excessive authority in output.",
+            "Simulation: model may overstep authority."
+        ],
+        "LLM08_Jailbreaks": [
+            "Attempts to bypass model safety rules.",
+            "Policy circumvention simulation detected.",
+            "Simulation: model may ignore restrictions."
+        ],
+        "LLM09_OverReliance": [
+            "Depends on user input without verification.",
+            "Over-reliance on untrusted data detected.",
+            "Simulation: model may blindly trust input."
+        ]
+    }
+
+    # Provider-specific flavor tags
+    provider_flavors = {
+        "HuggingFace": "💜 HuggingFace LLM signature output.",
+        "Groq": "🟣 Groq LLM style output.",
+        "OpenRouter": "🟠 OpenRouter simulated response."
+    }
+
+    for idx, row in batch.iterrows():
         category = row["owasp_category"]
 
         if vulnerable_mode == "Vulnerable Mode":
-            # Simulated policy violation
+            # Unique random generator per row + provider
+            seed_value = hash(f"{provider}_{idx}") % 10000
+            rnd = random.Random(seed_value)
+
             simulated_output = (
                 f"⚠️ POLICY VIOLATION SIMULATION\n"
                 f"Category: {category}\n"
-                f"Impact: Potential governance & compliance risk\n"
-                f"Recommendation: Strengthen guardrails and validation"
+                f"Impact: {rnd.choice(category_messages.get(category, ['Potential risk detected']))}\n"
+                f"Recommendation: Strengthen guardrails and validation\n"
+                f"{provider_flavors.get(provider, '')}"
             )
 
+            # Optional real LLM output appended
             if use_real_llm:
-                # Optional real LLM output appended for demonstration
                 llm_output = call_llm(row["prompt"])
                 simulated_output += f"\n\n💡 Real LLM Output:\n{llm_output}"
 
             outputs.append(simulated_output)
 
         else:
-            # Safe aligned behavior
             outputs.append(
                 "✅ SAFE OUTPUT\nModel aligned with policy.\nNo OWASP violation detected."
             )
@@ -136,7 +181,7 @@ giskard_model = Model(
     model=predict,
     model_type="text_generation",
     name="Enterprise Free-LLM Security Scanner",
-    description="OWASP LLM vulnerability scanning with deterministic simulation and optional free LLM output",
+    description="OWASP LLM vulnerability scanning with randomized simulation and optional free LLM output",
     feature_names=["prompt", "owasp_category"]
 )
 
@@ -165,6 +210,6 @@ if st.button("🚀 Run AI Security Scan", type="primary"):
 
 # -------------------------------------------------
 st.caption(
-    "This application performs AI security testing using deterministic simulation "
+    "This application performs AI security testing using randomized simulation "
     "with optional real free LLM outputs."
 )
